@@ -41,9 +41,31 @@ static const char *TAG = "esp-oled";
 extern "C" {
     void app_main();
 }
+    
+#define MAX_SHADES 17
+static const uint8_t shade8x8[17*8]= // 17 shade patterns 8x8 pixels
+    {
+      0,  0,  0,  0,  0,  0,  0,  0, // 0
+     17,  0,  0,  0, 17,  0,  0,  0,
+     17,  0, 68,  0, 17,  0, 68,  0,
+     68, 17, 68,  0, 68, 17, 68,  0,
+     85,  0,170,  0, 85,  0,170,  0,
+     68,170,  0,170, 68,170,  0,170,
+     68,170, 17,170, 68,170, 17,170,
+     85,136, 85,170, 85,136, 85,170,
+     85,170, 85,170, 85,170, 85,170,
+     85,238, 85,170,119,170, 85,170,
+    221,170,119,170,221,170,119,170,
+    221,170,255,170,221,170,255,170,
+     85,255,170,255, 85,255,170,255,
+    221,119,221,255,221,119,221,255,
+    119,255,221,255,119,255,221,255,
+    119,255,255,255,119,255,255,255,
+    255,255,255,255,255,255,255,255  // 16
+    };
 
-// 8 pages, 8 bytes tall, 96 px wide
-    static uint8_t screen_buffer[(128 * 8)];
+// 8 pages, 8 bytes tall, 128 px wide
+static uint8_t screen_buffer[(128 * 8)];
 
 static esp_err_t i2c_master_init(void)
 {
@@ -373,24 +395,59 @@ void oled_init(void){
 
 uint16_t coord_to_frame(uint8_t x, uint8_t y){
     // The OLED screen is divieded into 8 pages stacked vertically,
-    // each is 8 px tall and 96 px wide.  They are ordered top to bottom,
+    // each is 8 px tall and 128 px wide.  They are ordered top to bottom,
     // left to right within a page, then top to bottom by page
     // Coordinates are given (x increasing to right, y increasing to bottom)
     // Return a pixel index that corresponds to the frame ordering of the pixel indicated
     // by the coordinates.
-    uint8_t page = y / 8;
-    uint8_t page_row = y % 8;
-    uint8_t column = x;
-    return ((page * (96 * 8)) + (column * 8) + (page_row));
+    uint16_t page = y / 8;
+    uint16_t page_row = y % 8;
+    uint16_t column = x;
+    return ((page * (128 * 8)) + (column * 8) + (page_row));
 }
 
 void write_px_to_buffer(uint16_t px, uint8_t* buffer){
-    buffer[(px / 8)] = buffer[px / 8] | (px % 8);
+    uint16_t byte_index = px / 8;
+    uint8_t bit = px % 8;
+    //printf("Writing px@ %d; byte: %d, bit: %d\n", px, byte_index, bit);
+    buffer[byte_index] = buffer[byte_index] | (0x01 << bit);
 }
 
-void clear_buffer(uint8_t* bufer){
-    for(int i = 0; i < (96 * 8); i++){
-        bufer[i] = 0;
+void clear_buffer(uint8_t* buffer){
+    for(int i = 0; i < (128 * 8); i++){
+        buffer[i] = 0;
+    }
+}
+
+void fill_buffer(uint8_t* buffer){
+    for(int i = 0; i < (128 * 8); i++){
+        buffer[i] = 255;
+    }
+}
+
+void draw_buffer(uint8_t* buffer){
+    uint8_t data[2];
+    for(int i = 0; i < (128 * 8); i++){
+        data[0] = 0x40;
+        data[1] = screen_buffer[i];
+        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    }
+}
+
+void draw_buffer_slowly(uint8_t* buffer, uint8_t delay_ms){
+    uint8_t data[2];
+    for(int i = 0; i < (128 * 8); i++){
+        data[0] = 0x40;
+        data[1] = screen_buffer[i];
+        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+        vTaskDelay(delay_ms / portTICK_PERIOD_MS);
+    }
+}
+
+void dump_buffer(uint8_t* buffer){
+    for(int i = 0; i < (128 * 8); i++){
+        printf("%d, ", buffer[i]);
+        if ((i % 127) == 0) printf("\n===================\n");
     }
 }
 
@@ -461,21 +518,35 @@ void oled_spiral(int size){
     
 }
 
-void draw_line(){
-
-
+void draw_line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1){
     // Draw 25 px wide line at row 2
-    for(uint8_t i = 0; i < 64; i++){
-        write_px_to_buffer(coord_to_frame(i, 2), screen_buffer);
-    }
-    
-    uint8_t data[2];
-    for(int i = 0; i < (128 * 8); i++){
-        data[0] = 0x40;
-        data[1] = screen_buffer[i];
-        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-    }
+    // TODO for now assume horizontal line at y0
+    // TODO also x0 < x1
+    for(uint8_t x = x0; x < x1; x++){
+        write_px_to_buffer(coord_to_frame(x, y0), screen_buffer);
+    }  
+}
 
+void shade_px(uint8_t* buffer, uint8_t shade, uint8_t x, uint8_t y){
+    if (shade >= MAX_SHADES) shade = MAX_SHADES - 1; // TODO this is clumsy, fix MAX SHADES so we don't need the -1
+    uint8_t shade_x = x % 8;
+    uint8_t shade_y = y % 8;
+    bool value = ((shade8x8[((shade * 8) + shade_x)]) >> shade_y) & 0x01;
+
+    // Write the pixel to the buffer if we should, else leave it blank
+    if (value) write_px_to_buffer(coord_to_frame(x, y), buffer);
+}
+
+void shade_demo(uint8_t* buffer){
+    // Shade left to right
+    uint8_t shade;
+    for (int x = 0; x < 128; x++){
+        for (int y = 0; y < (8 * 8); y++){
+            shade = (x * (MAX_SHADES - 1)) / 128; // 128 is max x value
+            //printf("Shading (%d, %d) with %d value...\n", x, y, shade);
+            shade_px(buffer, shade, x, y);
+        }
+    }
 }
 
 void app_main(void)
@@ -515,7 +586,28 @@ void app_main(void)
     //}
 
     
-    draw_line();
+    for (int y = 0; y < 64; y++){
+        //clear_buffer(screen_buffer);
+        draw_line(0, y,  127, y);
+        draw_buffer(screen_buffer);
+    }
+
+    clear_buffer(screen_buffer);
+    draw_buffer(screen_buffer);
+    fill_buffer(screen_buffer);
+    draw_buffer_slowly(screen_buffer, 10);
+    
+
+    //clear_buffer(screen_buffer);
+    //draw_buffer(screen_buffer);
+    //draw_line(0, 0,  127, 0);
+    //dump_buffer(screen_buffer);
+
+    clear_buffer(screen_buffer);
+    draw_buffer(screen_buffer);
+    shade_demo(screen_buffer);
+    draw_buffer(screen_buffer);
+    
 
     /* 
 
