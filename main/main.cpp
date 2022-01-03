@@ -46,6 +46,8 @@ extern "C" {
 }
     
 #define MAX_SHADES 17
+#define SHADE_SOLID 16
+#define SHADE_EMPTY 0
 static const uint8_t shade8x8[17*8]= // 17 shade patterns 8x8 pixels
     {
       0,  0,  0,  0,  0,  0,  0,  0, // 0
@@ -439,6 +441,28 @@ void write_px_to_buffer(uint16_t px, uint8_t* buffer){
     buffer[byte_index] = buffer[byte_index] | (0x01 << bit);
 }
 
+void shade_px(uint8_t* buffer, uint8_t shade, uint8_t x, uint8_t y){
+    if (shade >= MAX_SHADES) shade = MAX_SHADES - 1; // TODO this is clumsy, fix MAX SHADES so we don't need the -1
+    uint8_t shade_x = x % 8;
+    uint8_t shade_y = y % 8;
+    bool value = ((shade8x8[((shade * 8) + shade_x)]) >> shade_y) & 0x01;
+
+    // Write the pixel to the buffer if we should, else leave it blank
+    if (value) write_px_to_buffer(coord_to_frame(x, y), buffer);
+}
+
+void shade_demo(uint8_t* buffer){
+    // Shade left to right
+    uint8_t shade;
+    for (int x = 0; x < 128; x++){
+        for (int y = 0; y < (8 * 8); y++){
+            shade = (x * (MAX_SHADES - 1)) / 128; // 128 is max x value
+            //printf("Shading (%d, %d) with %d value...\n", x, y, shade);
+            shade_px(buffer, shade, x, y);
+        }
+    }
+}
+
 void clear_buffer(uint8_t* buffer){
     for(int i = 0; i < (128 * 8); i++){
         buffer[i] = 0;
@@ -544,19 +568,19 @@ void oled_spiral(int size){
     
 }
 
-void draw_line(Point p0, Point p1){
+void draw_shaded_line_to_buffer(Point p0, Point p1, uint8_t weight){
     float slope;
     if(std::abs(p1.gety() - p0.gety()) < std::abs(p1.getx() - p0.getx())){ // Line is longer in horizontal direction
         float y = p0.gety();
         slope = ((float)(p1.gety() - p0.gety()) / (p1.getx() - p0.getx()));
         if(p0.getx() < p1.getx()){
             for(uint8_t x = p0.getx(); x < p1.getx(); x++){
-                write_px_to_buffer(coord_to_frame(x, (uint8_t)y), screen_buffer);
+                shade_px(screen_buffer, weight, x, (uint8_t)y);
                 y += slope;
             }
         } else {
             for(uint8_t x = p0.getx(); x > p1.getx(); x--){
-                write_px_to_buffer(coord_to_frame(x, (uint8_t)y), screen_buffer);
+                shade_px(screen_buffer, weight, x, (uint8_t)y);
                 y -= slope;            
             }
         }
@@ -566,16 +590,20 @@ void draw_line(Point p0, Point p1){
         slope = ((float)(p1.getx() - p0.getx()) / (p1.gety() - p0.gety()));        
         if(p0.gety() < p1.gety()){
             for(uint8_t y = p0.gety(); y < p1.gety(); y++){
-                write_px_to_buffer(coord_to_frame((uint8_t)x, y), screen_buffer);
+                shade_px(screen_buffer, weight, (uint8_t)x, y);
                 x += slope;
             }
         } else {
             for(uint8_t y = p0.gety(); y > p1.gety(); y--){
-                write_px_to_buffer(coord_to_frame((uint8_t)x, y), screen_buffer);
+                shade_px(screen_buffer, weight, (uint8_t)x, y);
                 x -= slope;
             }
         }
     }
+}
+
+void draw_solid_line_to_buffer(Point p0, Point p1){
+    draw_shaded_line_to_buffer(p0, p1, SHADE_SOLID);
 }
 
 void draw_line_to_fill_buffers(Point p0, Point p1, uint8_t* lbuf, uint8_t* rbuf){
@@ -684,7 +712,7 @@ void print_buffers(uint8_t* lbuffer, uint8_t* rbuffer){
     }
 }
 
-void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer){
+void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer, uint8_t shade){
     //printf("(%d, %d)\n", p1.getx(), p1.gety());
     //printf("(%d, %d)\n", p2.getx(), p2.gety());
     //printf("(%d, %d)\n", p3.getx(), p3.gety());
@@ -709,41 +737,18 @@ void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer){
     */
     uint8_t buf_left[FRAME_Y_RESOLUTION] = { }, buf_right[FRAME_Y_RESOLUTION] = { }; 
     draw_line_to_fill_buffers(p1, p2, buf_left, buf_right);
-    print_buffers(buf_left, buf_right);
     draw_line_to_fill_buffers(p2, p3, buf_left, buf_right);
-    print_buffers(buf_left, buf_right);
     draw_line_to_fill_buffers(p3, p1, buf_left, buf_right);
-    print_buffers(buf_left, buf_right);
     for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
         if(buf_left[i] != buf_right[i]){
-            draw_line(Point(buf_left[i], i), Point(buf_right[i], i));
+            draw_shaded_line_to_buffer(Point(buf_left[i], i), Point(buf_right[i], i), shade);
         }
     }
 
 
 }
 
-void shade_px(uint8_t* buffer, uint8_t shade, uint8_t x, uint8_t y){
-    if (shade >= MAX_SHADES) shade = MAX_SHADES - 1; // TODO this is clumsy, fix MAX SHADES so we don't need the -1
-    uint8_t shade_x = x % 8;
-    uint8_t shade_y = y % 8;
-    bool value = ((shade8x8[((shade * 8) + shade_x)]) >> shade_y) & 0x01;
 
-    // Write the pixel to the buffer if we should, else leave it blank
-    if (value) write_px_to_buffer(coord_to_frame(x, y), buffer);
-}
-
-void shade_demo(uint8_t* buffer){
-    // Shade left to right
-    uint8_t shade;
-    for (int x = 0; x < 128; x++){
-        for (int y = 0; y < (8 * 8); y++){
-            shade = (x * (MAX_SHADES - 1)) / 128; // 128 is max x value
-            //printf("Shading (%d, %d) with %d value...\n", x, y, shade);
-            shade_px(buffer, shade, x, y);
-        }
-    }
-}
 
 void app_main(void)
 {
@@ -778,12 +783,21 @@ void app_main(void)
     ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
 
     // Demo draw tri
-    clear_buffer(screen_buffer);
-    //fill_tri(Point(0,0), Point(127, 0), Point(66, 63), screen_buffer);
-    fill_tri(Point(0,63), Point(127, 63), Point(66, 0), screen_buffer);    
-    //fill_tri(Point(0,0), Point(0, 63), Point(127, 31), screen_buffer);
-    //fill_tri(Point(127,0), Point(127, 63), Point(0, 31), screen_buffer);   
-    draw_buffer(screen_buffer);
+    uint8_t shade = 0;
+    uint8_t direction = 1;
+    while(true){
+        clear_buffer(screen_buffer);
+        //fill_tri(Point(0,0), Point(127, 0), Point(66, 63), screen_buffer);
+        fill_tri(Point(0,63), Point(127, 63), Point(66, 0), screen_buffer, shade);    
+        //fill_tri(Point(0,0), Point(0, 63), Point(127, 31), screen_buffer);
+        //fill_tri(Point(127,0), Point(127, 63), Point(0, 31), screen_buffer);   
+        draw_buffer(screen_buffer);
+        shade += direction;
+        if(shade == SHADE_SOLID) direction = -1;
+        if(shade == SHADE_EMPTY) direction = 1;
+
+    }
+
 
     /* // demo draw lines
     clear_buffer(screen_buffer);
