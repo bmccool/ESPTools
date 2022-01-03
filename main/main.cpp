@@ -14,6 +14,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_spi_flash.h"
+#include <cmath> // std::abs
 
 //I2C_MASTER_SDA
 //I2C_MASTER_SCL
@@ -37,6 +38,8 @@ static const char *TAG = "esp-oled";
 // BAM: Using a 128x64 display, so 0x3D!
 // EXCEPT!  3D gives nak, 3C gives ack, so, 3C must be correct???
 #define SSD1306_I2C_ADDR 0x3C
+#define FRAME_Y_RESOLUTION 64
+#define FRAME_X_RESOLUTION 128
 
 extern "C" {
     void app_main();
@@ -66,6 +69,29 @@ static const uint8_t shade8x8[17*8]= // 17 shade patterns 8x8 pixels
 
 // 8 pages, 8 bytes tall, 128 px wide
 static uint8_t screen_buffer[(128 * 8)];
+
+class Point {
+    private:
+        uint8_t x, y;
+
+    public:
+        Point(uint8_t x0, uint8_t y0){
+            set(x0, y0);
+        }
+
+        void set(uint8_t x0, uint8_t y0){
+            x = x0;
+            y = y0;
+        }
+
+        uint8_t getx(){
+            return x;
+        }
+
+        uint8_t gety(){
+            return y;
+        }        
+};
 
 static esp_err_t i2c_master_init(void)
 {
@@ -518,13 +544,183 @@ void oled_spiral(int size){
     
 }
 
-void draw_line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1){
-    // Draw 25 px wide line at row 2
-    // TODO for now assume horizontal line at y0
-    // TODO also x0 < x1
-    for(uint8_t x = x0; x < x1; x++){
-        write_px_to_buffer(coord_to_frame(x, y0), screen_buffer);
-    }  
+void draw_line(Point p0, Point p1){
+    float slope;
+    if(std::abs(p1.gety() - p0.gety()) < std::abs(p1.getx() - p0.getx())){ // Line is longer in horizontal direction
+        float y = p0.gety();
+        slope = ((float)(p1.gety() - p0.gety()) / (p1.getx() - p0.getx()));
+        if(p0.getx() < p1.getx()){
+            for(uint8_t x = p0.getx(); x < p1.getx(); x++){
+                write_px_to_buffer(coord_to_frame(x, (uint8_t)y), screen_buffer);
+                y += slope;
+            }
+        } else {
+            for(uint8_t x = p0.getx(); x > p1.getx(); x--){
+                write_px_to_buffer(coord_to_frame(x, (uint8_t)y), screen_buffer);
+                y -= slope;            
+            }
+        }
+    }
+    else { // Line is 45 degrees or longer in vertical direction
+        float x = p0.getx();
+        slope = ((float)(p1.getx() - p0.getx()) / (p1.gety() - p0.gety()));        
+        if(p0.gety() < p1.gety()){
+            for(uint8_t y = p0.gety(); y < p1.gety(); y++){
+                write_px_to_buffer(coord_to_frame((uint8_t)x, y), screen_buffer);
+                x += slope;
+            }
+        } else {
+            for(uint8_t y = p0.gety(); y > p1.gety(); y--){
+                write_px_to_buffer(coord_to_frame((uint8_t)x, y), screen_buffer);
+                x -= slope;
+            }
+        }
+    }
+}
+
+void draw_line_to_fill_buffers(Point p0, Point p1, uint8_t* lbuf, uint8_t* rbuf){
+    /*
+    ASSUMPTION: Points P1, P2, P3 are given in clockwise order
+    If line Y is increasing, we are on the left buffer (clockwise)
+    If line Y is decreasing, we are on the right buffer (clockwise)
+    if line Y is neither increasing nor decreasing
+        min x of line to left buffer, max x of line to right buffer    
+    */
+
+   // TODO 
+   // We have an issue drawing
+   // Point(66, 0) -> Point(0,63)
+   // The very first x coordinate (which should be 66, or is it reversed?) is not transferred
+   // to the lbuffer
+   // Q: is it reversed?
+   // x range 66
+   // y range 63, y is increasing, x is decreasing, line is longer in horizontal
+    float slope;
+    if(p0.gety() == p1.gety()) { // Simple case, min_x to lbuf and max_x to rbuf
+        if(p0.getx() > p1.getx()) {
+            rbuf[p0.gety()] = p0.getx();
+            lbuf[p0.gety()] = p1.getx();
+        } else {
+            rbuf[p0.gety()] = p1.getx();
+            lbuf[p0.gety()] = p0.getx();
+        }
+        return; // Early return, don't need to do the rest of this
+    }
+
+    // Normal case - Which buffer does this line go to?
+    uint8_t* buffer;
+    if(p0.gety() < p1.gety()) { // Y is increasing
+        buffer = lbuf;
+    } else { // Y is decreasing
+        buffer = rbuf;
+    }
+
+
+
+    // TODO here begins duplicated code from draw_line
+    if(std::abs(p1.gety() - p0.gety()) < std::abs(p1.getx() - p0.getx())){ // Line is longer in horizontal direction Multiple xs for same ys
+        float y = p0.gety();
+        slope = ((float)(p1.gety() - p0.gety()) / (p1.getx() - p0.getx()));
+
+
+        // If lbuf and x increasing, reverse x direction
+        // If rbuf and x decreasing, reverse x direction
+        // This is because multiple xs can share the same ys, we want the widest possible x range for each y
+
+        if(p0.getx() < p1.getx()){ // x increasing
+            if(buffer == lbuf){
+                y = p1.gety();
+                for(uint8_t x = p1.getx(); x > p0.getx(); x--){
+                    buffer[(uint8_t)y] = x;
+                    y -= slope;
+                }
+            } else {
+                for(uint8_t x = p0.getx(); x < p1.getx(); x++){
+                    buffer[(uint8_t)y] = x;
+                    y += slope;
+                }
+            }
+        } else {                   // x decreasing
+            if(buffer == rbuf){
+                y = p1.gety();
+                for(uint8_t x = p1.getx(); x < p0.getx(); x++){
+                    buffer[(uint8_t)y] = x;
+                    y += slope;            
+                }
+            } else {
+                for(uint8_t x = p0.getx(); x > p1.getx(); x--){
+                    buffer[(uint8_t)y] = x;
+                    y -= slope;            
+                }
+            }
+        }
+    }
+    else { // Line is 45 degrees or longer in vertical direction
+        float x = p0.getx();
+        slope = ((float)(p1.getx() - p0.getx()) / (p1.gety() - p0.gety()));        
+        if(p0.gety() < p1.gety()){
+            for(uint8_t y = p0.gety(); y < p1.gety(); y++){
+                buffer[(uint8_t)y] = x;
+                x += slope;
+            }
+        } else {
+            for(uint8_t y = p0.gety(); y > p1.gety(); y--){
+                buffer[(uint8_t)y] = x;
+                x -= slope;
+            }
+        }
+    }
+
+    // As a final measure "dot" the endpoints.  This takes care of any sloppyness from float->int stuff
+    buffer[p0.gety()] = p0.getx();
+    buffer[p1.gety()] = p1.getx();
+}
+
+
+void print_buffers(uint8_t* lbuffer, uint8_t* rbuffer){
+    printf("Y   LBUFFER RBUFFER\n");
+    for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
+        printf("%d:  %d,  %d\n", i, lbuffer[i], rbuffer[i]);
+    }
+}
+
+void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer){
+    //printf("(%d, %d)\n", p1.getx(), p1.gety());
+    //printf("(%d, %d)\n", p2.getx(), p2.gety());
+    //printf("(%d, %d)\n", p3.getx(), p3.gety());
+    //draw_line(p1, p2);
+    //draw_line(p2, p3);
+    //draw_line(p3, p1);
+
+    /*
+    Idea is to use two buffers, left and right, to hold the x coordinates
+    of the left and right side of a horizontal line between them, at each
+    vertical position that should be rendered.  Then just draw the lines.
+    \<---------->\
+     \<---------->\
+      \<---------->|
+       \<--------->|
+        \<-------->|
+    ASSUMPTION: Points P1, P2, P3 are given in clockwise order
+    If line Y is increasing, we are on the left buffer (clockwise)
+    If line Y is decreasing, we are on the right buffer (clockwise)
+    if line Y is neither increasing nor decreasing
+        min x of line to left buffer, max x of line to right buffer
+    */
+    uint8_t buf_left[FRAME_Y_RESOLUTION] = { }, buf_right[FRAME_Y_RESOLUTION] = { }; 
+    draw_line_to_fill_buffers(p1, p2, buf_left, buf_right);
+    print_buffers(buf_left, buf_right);
+    draw_line_to_fill_buffers(p2, p3, buf_left, buf_right);
+    print_buffers(buf_left, buf_right);
+    draw_line_to_fill_buffers(p3, p1, buf_left, buf_right);
+    print_buffers(buf_left, buf_right);
+    for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
+        if(buf_left[i] != buf_right[i]){
+            draw_line(Point(buf_left[i], i), Point(buf_right[i], i));
+        }
+    }
+
+
 }
 
 void shade_px(uint8_t* buffer, uint8_t shade, uint8_t x, uint8_t y){
@@ -581,33 +777,52 @@ void app_main(void)
     data[3] = 0x7F;
     ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
 
-    //for (int i = 0; i < 128; i++){
-    //    oled_spiral(i);
-    //}
+    // Demo draw tri
+    clear_buffer(screen_buffer);
+    //fill_tri(Point(0,0), Point(127, 0), Point(66, 63), screen_buffer);
+    fill_tri(Point(0,63), Point(127, 63), Point(66, 0), screen_buffer);    
+    //fill_tri(Point(0,0), Point(0, 63), Point(127, 31), screen_buffer);
+    //fill_tri(Point(127,0), Point(127, 63), Point(0, 31), screen_buffer);   
+    draw_buffer(screen_buffer);
 
+    /* // demo draw lines
+    clear_buffer(screen_buffer);
+    draw_line(0,0, 127, 63);
+    draw_line(0,63, 127, 0);
+    draw_buffer(screen_buffer);
+    draw_line(  0,  0, 127,  0);
+    draw_line(127,  0, 127, 63);
+    draw_line(127, 63,   0, 63);
+    draw_line(  0, 63,   0,  0);
+    draw_buffer(screen_buffer);
+    */
     
+    /* // Fill screen one horizontal line at a time
     for (int y = 0; y < 64; y++){
         //clear_buffer(screen_buffer);
         draw_line(0, y,  127, y);
         draw_buffer(screen_buffer);
     }
+    */
 
+    /* // Wipe screen one column at a time
     clear_buffer(screen_buffer);
     draw_buffer(screen_buffer);
     fill_buffer(screen_buffer);
     draw_buffer_slowly(screen_buffer, 10);
-    
+     */
 
     //clear_buffer(screen_buffer);
     //draw_buffer(screen_buffer);
     //draw_line(0, 0,  127, 0);
     //dump_buffer(screen_buffer);
 
+    /* // Shade demo
     clear_buffer(screen_buffer);
     draw_buffer(screen_buffer);
     shade_demo(screen_buffer);
     draw_buffer(screen_buffer);
-    
+    */
 
     /* 
 
