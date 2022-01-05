@@ -46,6 +46,8 @@ static const char *TAG = "esp-oled";
 extern "C" {
     void app_main();
 }
+
+#define PI 3.14159265
     
 #define MAX_SHADES 17
 #define SHADE_SOLID 16
@@ -132,6 +134,10 @@ class Point3 { //TODO could this inherit from Point?
                                                         {z}};
             return retval;
         }  
+
+        void print(void){
+            printf("X: %f, Y: %f Z: %f\n", getx(), gety(), getz());
+        }
 };
 
 template <class T = uint8_t> // Default element type is uint8_t
@@ -162,18 +168,18 @@ class Matrix {
             printf("===============================\n");
             for(int i = 0; i < getrows(); i++){
                 for(int j = 0; j < getcolumns(); j++){
-                    printf("%d ", elements[i][j]);
+                    printf("%f ", elements[i][j]); //TODO this is gonna complain if our template type isn't float...
                 }
                 printf("\n");
             }
-            printf("===============================\n\n");
+            printf("===============================\n");
         }
 };
 
 class RotationMatrix3 : public Matrix<float>{
     public:
         float angle;
-        RotationMatrix3(float angle = 0): Matrix<float>(3, 3), angle(angle){update();}
+        RotationMatrix3(float angle = 0): Matrix<float>(3, 3), angle(angle){}
 
         virtual void update(void){
             std::cout << "Update the rotation matrix based on the angle." << std::endl;
@@ -182,6 +188,7 @@ class RotationMatrix3 : public Matrix<float>{
 
 class RotationMatrixZ : public RotationMatrix3{
     public:
+        RotationMatrixZ(float angle) : RotationMatrix3(angle){update();};
         void update(void){
             elements[0][0] =  cos(angle);
             elements[0][1] = -sin(angle);
@@ -199,6 +206,7 @@ class RotationMatrixZ : public RotationMatrix3{
 
 class RotationMatrixY : public RotationMatrix3{
     public:
+        RotationMatrixY(float angle) : RotationMatrix3(angle){update();};    
         void update(void){
             elements[0][0] =  cos(angle);
             elements[0][1] =  0;
@@ -216,6 +224,7 @@ class RotationMatrixY : public RotationMatrix3{
 
 class RotationMatrixX : public RotationMatrix3{
     public:
+        RotationMatrixX(float angle) : RotationMatrix3(angle){update();};    
         void update(void){
             elements[0][0] =  1;
             elements[0][1] =  0;
@@ -230,6 +239,8 @@ class RotationMatrixX : public RotationMatrix3{
             elements[2][2] =  cos(angle);
         }
 };
+
+
 
 class RotationMatrix2{
     // Rotation Matrix will always be 2x2
@@ -943,21 +954,116 @@ Matrix<float> m3x3by3x1(Matrix<float> m1, Matrix<float> m2){
         return retval;
     }
     retval.elements[0][0] = ((m1.elements[0][0] * m2.elements[0][0]) +
-                             (m1.elements[0][1] * m2.elements[0][0]) +
-                             (m1.elements[0][2] * m2.elements[0][0]));
-    retval.elements[1][0] = ((m1.elements[1][0] * m2.elements[1][0]) +
+                             (m1.elements[0][1] * m2.elements[1][0]) +
+                             (m1.elements[0][2] * m2.elements[2][0]));
+    retval.elements[1][0] = ((m1.elements[1][0] * m2.elements[0][0]) +
                              (m1.elements[1][1] * m2.elements[1][0]) +
-                             (m1.elements[1][2] * m2.elements[1][0]));
-    retval.elements[2][0] = ((m1.elements[2][0] * m2.elements[2][0]) +
-                             (m1.elements[2][1] * m2.elements[2][0]) +
+                             (m1.elements[1][2] * m2.elements[2][0]));
+    retval.elements[2][0] = ((m1.elements[2][0] * m2.elements[0][0]) +
+                             (m1.elements[2][1] * m2.elements[1][0]) +
                              (m1.elements[2][2] * m2.elements[2][0]));                             
     return retval;
 }
+
+Point3 rotate_point(RotationMatrix3 m, Point3 p){
+    Point3 rotated_point;
+    Matrix<float> rotated_point_matrix(3, 1);
+    rotated_point_matrix = m3x3by3x1(m, p.to_matrix());
+    rotated_point.set(rotated_point_matrix.elements[0][0],
+                      rotated_point_matrix.elements[1][0],
+                      rotated_point_matrix.elements[2][0]);
+    return rotated_point;
+}
+
+class Sprite{
+    // I'm calling Sprite a collection of things in 3D that should move/rotate/draw together
+    // Points are RELATIVE TO ORIGIN
+    // RENDER will cast them back to absolute coordinates
+    public:
+        Point3 origin;
+        float angle_x;
+        float angle_y;
+        float angle_z;
+        std::vector<Point3> points;
+        // TODO Lines
+        // TODO Surfaces (Tris, Quads?)
+        Sprite(Point3 origin = Point3(64, 32, 0)): origin(origin), angle_x(0), angle_y(0), angle_z(0){}
+        Sprite(float x, float y, float z): Sprite(Point3(x, y, z)){}
+        
+        
+        void add_point(Point3 p){
+            points.push_back(p);
+        }
+        void create_point(float x, float y, float z){
+            points.emplace_back(x, y, z);
+        }
+
+        // TODO who should hold the rotation matrix?
+        // Should they be calculated at time rotate?
+        // probably...
+        void rotate_z(float new_z_angle){
+            angle_z = new_z_angle;
+            printf("angle_z: %f\n", angle_z);
+                    
+            // Create rotation matrix Z
+            RotationMatrixZ rotation_matrix_z(angle_z); // TODO What's convention for casing for class vs instance?
+            rotation_matrix_z.update();
+            rotation_matrix_z.angle = angle_z;
+            rotation_matrix_z.update(); //TODO Two updates?  :(
+
+            printf("Rotate each part of the sprite\n");
+            // Rotate each part of the sprite
+            print();
+            for(int i = 0; i < points.size(); i++){
+                points[i] = rotate_point(rotation_matrix_z, points[i]); // TODO rotate should be a method of a rotation matrix
+            }
+            print();
+        }
+
+        void print(void){
+            for(int i = 0; i < points.size(); i++){
+                points[i].print();
+            }
+        }
+
+        void render(Matrix<float> projection_matrix, uint8_t* buffer){ // TODO should the projection matrix be held by the sprite?  Probably not...
+            // For each thing to render, we need to rotate, then cast from relative (to origin) -> absolute position,
+            // then project the point from 3D -> 2D using the projection matrix given
+            // Then, just draw each point to the buffer
+
+            Point3 rotated_point;
+            Point3 absolute_point;
+            Point projected_point;
+            Matrix<float> projected_matrix(2, 1);
+            for(int i = 0; i < points.size(); i++){
+                // Rotate the point
+                RotationMatrixZ rotation_matrix_z(angle_z); // TODO What's convention for casing for class vs instance?
+                rotated_point = rotate_point(rotation_matrix_z, points[i]);
+
+                // Cast to absolute coordinates
+                absolute_point.set(rotated_point.getx() + origin.getx(),
+                                   rotated_point.gety() + origin.gety(),
+                                   rotated_point.getz() + origin.getz());
+
+                // Project from 3D -> 2D
+                projected_matrix = m2x3by3x1(projection_matrix, absolute_point.to_matrix());
+                projected_point.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0]);
+
+                // Draw to buffer
+                shade_px(buffer, SHADE_SOLID, projected_point.getx(), projected_point.gety());                                  
+            }
+        }
+
+
+}; // Sprite
 
 void cube_demo(void){
     clear_buffer(screen_buffer);
     draw_buffer(screen_buffer);
 
+    float angle = 0;
+    RotationMatrixZ rotate_z(angle);
+    rotate_z.update();
     std::vector<std::vector<float>> orthogonal_projection_matrix = {
         {1, 0, 0},
         {0, 1, 0},
@@ -970,17 +1076,70 @@ void cube_demo(void){
     points[3].set(20, 40, 0);
 
     Point projected_point;
+    Point3 rotated_point;
     Matrix<float> projected_matrix(2, 1);
-    for(int i = 0; i < 4; i++){
-        // Rotate the point
-        
 
-        // Project the point
-        projected_matrix = m2x3by3x1(orthogonal_projection_matrix, points[i].to_matrix());
-        projected_point.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0]);
-        shade_px(screen_buffer, SHADE_SOLID, projected_point.getx(), projected_point.gety());
+    while(true){
+        for(int i = 0; i < 4; i++){
+            // Rotate the point
+            rotated_point = rotate_point(rotate_z, points[i]); // TODO rotate should be a method of a rotation matrix
+
+            // Project the point
+            projected_matrix = m2x3by3x1(orthogonal_projection_matrix, rotated_point.to_matrix());
+            projected_point.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0]);
+            shade_px(screen_buffer, SHADE_SOLID, projected_point.getx(), projected_point.gety());
+        }
+        draw_buffer(screen_buffer);
+        angle = angle + 0.01;
+        rotate_z.angle = angle;
+        rotate_z.update();
     }
+}
+
+void demo_rotate_box_z(void){
+    clear_buffer(screen_buffer);
     draw_buffer(screen_buffer);
+    Sprite box;
+    
+    box.create_point( 20,  20, 0);
+    box.create_point( 20, -20, 0);
+    box.create_point(-20,  20, 0);
+    box.create_point(-20, -20, 0);
+
+    box.create_point(  4,  20, 0);
+    box.create_point(  4, -20, 0);
+    box.create_point( -4,  20, 0);
+    box.create_point( -4, -20, 0);    
+
+    box.create_point( 20,   0, 0);
+    box.create_point(-20,   0, 0);
+    box.create_point( 20,   4, 0);
+    box.create_point(-20,   4, 0);
+    box.create_point( 20,  -4, 0);
+    box.create_point(-20,  -4, 0);
+    
+    //box.create_point( 10, 0, 0);
+
+    std::vector<std::vector<float>> orthogonal_projection_matrix = {
+        {1, 0, 0},
+        {0, 1, 0},
+    };    
+
+    std::cout << "box.origin: " << std::endl;
+    box.origin.print();
+
+    while(true){
+        clear_buffer(screen_buffer);
+        //draw_buffer(screen_buffer);
+
+        //std::cout << "Render the box" << std::endl;
+        box.render(orthogonal_projection_matrix, screen_buffer);
+        draw_buffer(screen_buffer);
+        
+        //std::cout << "Rotate the box" << std::endl;
+        box.angle_z = box.angle_z + (1 * PI / 180);
+        //box.rotate_z(angle);
+    }
 }
 
 void app_main(void)
@@ -1032,7 +1191,8 @@ void app_main(void)
     }
     */
 
-    cube_demo();
+    //cube_demo();
+    demo_rotate_box_z();
 
     /* // demo draw lines
     clear_buffer(screen_buffer);
