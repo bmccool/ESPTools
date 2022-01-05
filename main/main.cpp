@@ -76,6 +76,57 @@ static const uint8_t shade8x8[17*8]= // 17 shade patterns 8x8 pixels
 // 8 pages, 8 bytes tall, 128 px wide
 static uint8_t screen_buffer[(128 * 8)];
 
+template <class T = uint8_t> // Default element type is uint8_t
+class Matrix {
+    private:
+        unsigned int rows, columns;
+        
+
+    public:
+        std::vector<std::vector<T>> elements;
+
+        // Initialize with a vector of vectors
+        Matrix(std::vector<std::vector<T>> elements): rows(elements.size()), columns(elements[0].size()), elements(elements){}
+
+        Matrix(unsigned int rows, unsigned int columns): rows(rows), columns(columns), elements(std::vector<std::vector<T>> (rows, std::vector<T>(columns, 0))){}
+        // Initialize (to empty) with size of (row, col)
+        //Matrix(int rows, int columns): 
+        unsigned int getcolumns(){
+            return columns;
+        }
+
+        unsigned int getrows(){
+            return rows;
+        }
+
+        void print(void){
+            printf("Size %d x %d\n", getrows(), getcolumns());
+            printf("===============================\n");
+            for(int i = 0; i < getrows(); i++){
+                for(int j = 0; j < getcolumns(); j++){
+                    printf("%f ", elements[i][j]); //TODO this is gonna complain if our template type isn't float...
+                }
+                printf("\n");
+            }
+            printf("===============================\n");
+        }
+};
+
+Matrix<float> m2x3by3x1(Matrix<float> m1, Matrix<float> m2){
+    Matrix<float> retval(2, 1);
+    if((m1.getcolumns() != 3) || (m2.getrows() != 3)){
+        printf("Columns of first matrix must match rows of second!\n");
+        return retval;
+    }
+    retval.elements[0][0] = ((m1.elements[0][0] * m2.elements[0][0]) +
+                             (m1.elements[0][1] * m2.elements[0][0]) +
+                             (m1.elements[0][2] * m2.elements[0][0]));
+    retval.elements[1][0] = ((m1.elements[1][0] * m2.elements[1][0]) +
+                             (m1.elements[1][1] * m2.elements[1][0]) +
+                             (m1.elements[1][2] * m2.elements[1][0]));
+    return retval;
+}
+
 class Point {
     private:
         uint8_t x, y;
@@ -138,43 +189,17 @@ class Point3 { //TODO could this inherit from Point?
         void print(void){
             printf("X: %f, Y: %f Z: %f\n", getx(), gety(), getz());
         }
-};
 
-template <class T = uint8_t> // Default element type is uint8_t
-class Matrix {
-    private:
-        unsigned int rows, columns;
-        
-
-    public:
-        std::vector<std::vector<T>> elements;
-
-        // Initialize with a vector of vectors
-        Matrix(std::vector<std::vector<T>> elements): rows(elements.size()), columns(elements[0].size()), elements(elements){}
-
-        Matrix(unsigned int rows, unsigned int columns): rows(rows), columns(columns), elements(std::vector<std::vector<T>> (rows, std::vector<T>(columns, 0))){}
-        // Initialize (to empty) with size of (row, col)
-        //Matrix(int rows, int columns): 
-        unsigned int getcolumns(){
-            return columns;
+        Point3 operator + (Point3 p){
+            return Point3(x + p.x, y + p.y, z + p.z);
         }
 
-        unsigned int getrows(){
-            return rows;
-        }
-
-        void print(void){
-            printf("Size %d x %d\n", getrows(), getcolumns());
-            printf("===============================\n");
-            for(int i = 0; i < getrows(); i++){
-                for(int j = 0; j < getcolumns(); j++){
-                    printf("%f ", elements[i][j]); //TODO this is gonna complain if our template type isn't float...
-                }
-                printf("\n");
-            }
-            printf("===============================\n");
+        Point to_2d(void){
+            return Point(x, y);
         }
 };
+
+
 
 class RotationMatrix3 : public Matrix<float>{
     public:
@@ -239,8 +264,6 @@ class RotationMatrixX : public RotationMatrix3{
             elements[2][2] =  cos(angle);
         }
 };
-
-
 
 class RotationMatrix2{
     // Rotation Matrix will always be 2x2
@@ -869,6 +892,33 @@ void draw_line_to_fill_buffers(Point p0, Point p1, uint8_t* lbuf, uint8_t* rbuf)
     buffer[p1.gety()] = p1.getx();
 }
 
+class Line {
+    public:
+        Point3 p1, p2;
+        Line(Point3 p1, Point3 p2): p1(p1), p2(p2){}
+
+        Line operator + (Point3 p){
+            return Line(p1 + p, p2 + p);
+        }
+
+        Line project(Matrix<float> projection_matrix){
+            // Project from 3D -> 2D using provided projection matrix
+            Matrix<float> projected_matrix(2, 1);
+            Point3 projected_p1, projected_p2;
+            projected_matrix = m2x3by3x1(projection_matrix, p1.to_matrix());
+            projected_p1.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0], 0);
+            projected_matrix = m2x3by3x1(projection_matrix, p2.to_matrix());
+            projected_p2.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0], 0);
+            return Line(projected_p1, projected_p2);
+        }
+
+        void draw_to(uint8_t* buffer){
+            draw_shaded_line_to_buffer(p1.to_2d(), p2.to_2d(), SHADE_SOLID); //TODO draw_shaded_line should be able to just take a line.
+        }
+
+
+}; // Line
+
 void print_buffers(uint8_t* lbuffer, uint8_t* rbuffer){
     printf("Y   LBUFFER RBUFFER\n");
     for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
@@ -932,21 +982,6 @@ Matrix<> matrix_multiply(Matrix<> m1, Matrix<> m2){
     return retval;
 }
 
-Matrix<float> m2x3by3x1(Matrix<float> m1, Matrix<float> m2){
-    Matrix<float> retval(2, 1);
-    if((m1.getcolumns() != 3) || (m2.getrows() != 3)){
-        printf("Columns of first matrix must match rows of second!\n");
-        return retval;
-    }
-    retval.elements[0][0] = ((m1.elements[0][0] * m2.elements[0][0]) +
-                             (m1.elements[0][1] * m2.elements[0][0]) +
-                             (m1.elements[0][2] * m2.elements[0][0]));
-    retval.elements[1][0] = ((m1.elements[1][0] * m2.elements[1][0]) +
-                             (m1.elements[1][1] * m2.elements[1][0]) +
-                             (m1.elements[1][2] * m2.elements[1][0]));
-    return retval;
-}
-
 Matrix<float> m3x3by3x1(Matrix<float> m1, Matrix<float> m2){
     Matrix<float> retval(3, 1);
     if((m1.getcolumns() != 3) || (m2.getrows() != 3)){
@@ -985,6 +1020,7 @@ class Sprite{
         float angle_y;
         float angle_z;
         std::vector<Point3> points;
+        std::vector<Line> lines;
         // TODO Lines
         // TODO Surfaces (Tris, Quads?)
         Sprite(Point3 origin = Point3(64, 32, 0)): origin(origin), angle_x(0), angle_y(0), angle_z(0){}
@@ -996,6 +1032,15 @@ class Sprite{
         }
         void create_point(float x, float y, float z){
             points.emplace_back(x, y, z);
+        }
+        void add_line(Line l){
+            lines.push_back(l);
+        }
+        void create_line(Point3 p1, Point3 p2){
+            lines.emplace_back(p1, p2);
+        }
+        void create_line(float x1, float y1, float z1, float x2, float y2, float z2){
+            lines.emplace_back(Point3(x1, y1, z1), Point3(x2, y2, z2));
         }
 
         // TODO who should hold the rotation matrix?
@@ -1026,6 +1071,11 @@ class Sprite{
             }
         }
 
+        Line rotate_line(RotationMatrix3 m, Line l){
+            Line rotated_line(rotate_point(m, l.p1), rotate_point(m, l.p2));
+            return rotated_line;
+        }
+
         void render(Matrix<float> projection_matrix, uint8_t* buffer){ // TODO should the projection matrix be held by the sprite?  Probably not...
             // For each thing to render, we need to rotate, then cast from relative (to origin) -> absolute position,
             // then project the point from 3D -> 2D using the projection matrix given
@@ -1035,10 +1085,14 @@ class Sprite{
             Point3 absolute_point;
             Point projected_point;
             Matrix<float> projected_matrix(2, 1);
+            RotationMatrixZ rotation_matrix_z(angle_z); // TODO What's convention for casing for class vs instance?
+            RotationMatrixY rotation_matrix_y(angle_y);
+            RotationMatrixX rotation_matrix_x(angle_x);            
             for(int i = 0; i < points.size(); i++){
                 // Rotate the point
-                RotationMatrixZ rotation_matrix_z(angle_z); // TODO What's convention for casing for class vs instance?
                 rotated_point = rotate_point(rotation_matrix_z, points[i]);
+                rotated_point = rotate_point(rotation_matrix_y, rotated_point);
+                rotated_point = rotate_point(rotation_matrix_x, rotated_point);
 
                 // Cast to absolute coordinates
                 absolute_point.set(rotated_point.getx() + origin.getx(),
@@ -1051,6 +1105,21 @@ class Sprite{
 
                 // Draw to buffer
                 shade_px(buffer, SHADE_SOLID, projected_point.getx(), projected_point.gety());                                  
+            }
+            for(int i = 0; i < lines.size(); i++){
+                // Rotate the line
+                Line rotated_line = rotate_line(rotation_matrix_z, lines[i]);
+                rotated_line = rotate_line(rotation_matrix_y, rotated_line);
+                rotated_line = rotate_line(rotation_matrix_x, rotated_line);
+
+                // Cast to absolute coordinates
+                Line absolute_line = rotated_line + origin;
+
+                // Project from 3D -> 2D
+                Line projected_line = absolute_line.project(projection_matrix);
+
+                // Draw to buffer
+                projected_line.draw_to(buffer);
             }
         }
 
@@ -1125,20 +1194,59 @@ void demo_rotate_box_z(void){
         {0, 1, 0},
     };    
 
-    std::cout << "box.origin: " << std::endl;
-    box.origin.print();
+    while(true){
+        clear_buffer(screen_buffer);
+        //draw_buffer(screen_buffer);
+
+        box.render(orthogonal_projection_matrix, screen_buffer);
+        draw_buffer(screen_buffer);
+        
+        box.angle_z = box.angle_z + (5 * PI / 180);
+        box.angle_y = box.angle_y + (10 * PI / 180);
+        box.angle_x = box.angle_x + (2 * PI / 180);
+    }
+}
+
+void demo_rotate_cube(void){
+    clear_buffer(screen_buffer);
+    draw_buffer(screen_buffer);
+    Sprite cube;
+       
+    // X Lines (4)
+    cube.create_line(-20, -20, -20,  20, -20, -20);
+    cube.create_line(-20,  20, -20,  20,  20, -20);
+    cube.create_line(-20, -20,  20,  20, -20,  20);
+    cube.create_line(-20,  20,  20,  20,  20,  20);
+
+    // Y Lines (4)
+    cube.create_line(-20, -20, -20, -20,  20, -20);
+    cube.create_line( 20, -20, -20,  20,  20, -20);
+    cube.create_line(-20, -20,  20, -20,  20,  20);
+    cube.create_line( 20, -20,  20,  20,  20,  20);
+
+    // Z Lines
+    cube.create_line(-20, -20, -20, -20, -20,  20);
+    cube.create_line(-20,  20, -20, -20,  20,  20);
+    cube.create_line( 20, -20, -20,  20, -20,  20);
+    cube.create_line( 20,  20, -20,  20,  20,  20);
+
+
+    std::vector<std::vector<float>> orthogonal_projection_matrix = {
+        {1, 0, 0},
+        {0, 1, 0},
+    };    
 
     while(true){
         clear_buffer(screen_buffer);
         //draw_buffer(screen_buffer);
 
-        //std::cout << "Render the box" << std::endl;
-        box.render(orthogonal_projection_matrix, screen_buffer);
+        cube.render(orthogonal_projection_matrix, screen_buffer);
         draw_buffer(screen_buffer);
         
-        //std::cout << "Rotate the box" << std::endl;
-        box.angle_z = box.angle_z + (1 * PI / 180);
-        //box.rotate_z(angle);
+        cube.angle_z = cube.angle_z + (5 * PI / 180);
+        cube.angle_y = cube.angle_y + (10 * PI / 180);
+        cube.angle_x = cube.angle_x + (2 * PI / 180);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
 
@@ -1192,7 +1300,8 @@ void app_main(void)
     */
 
     //cube_demo();
-    demo_rotate_box_z();
+    //demo_rotate_box_z();
+    demo_rotate_cube();
 
     /* // demo draw lines
     clear_buffer(screen_buffer);
