@@ -100,34 +100,34 @@ class Point {
 
 class Point3 { //TODO could this inherit from Point?
     private:
-        uint8_t x, y, z;
+        float x, y, z;
 
     public:
-        Point3(uint8_t x0 = 0, uint8_t y0 = 0, uint8_t z0 = 0){
+        Point3(float x0 = 0, float y0 = 0, float z0 = 0){
             set(x0, y0, z0);
         }
         
 
-        void set(uint8_t x0, uint8_t y0, uint8_t z0){
+        void set(float x0, float y0, float z0){
             x = x0;
             y = y0;
             z = z0;
         }
 
-        uint8_t getx(){
+        float getx(){
             return x;
         }
 
-        uint8_t gety(){
+        float gety(){
             return y;
         }
 
-        uint8_t getz(){
+        float getz(){
             return z;
         }
 
-        std::vector<std::vector<uint8_t>> to_matrix(){
-            std::vector<std::vector<uint8_t>> retval = {{x},
+        std::vector<std::vector<float>> to_matrix(){
+            std::vector<std::vector<float>> retval = {{x},
                                                         {y},
                                                         {z}};
             return retval;
@@ -230,7 +230,6 @@ class RotationMatrixX : public RotationMatrix3{
             elements[2][2] =  cos(angle);
         }
 };
-
 
 class RotationMatrix2{
     // Rotation Matrix will always be 2x2
@@ -922,8 +921,8 @@ Matrix<> matrix_multiply(Matrix<> m1, Matrix<> m2){
     return retval;
 }
 
-Matrix<> m2x3by3x1(Matrix<> m1, Matrix<> m2){
-    Matrix<> retval(2, 1);
+Matrix<float> m2x3by3x1(Matrix<float> m1, Matrix<float> m2){
+    Matrix<float> retval(2, 1);
     if((m1.getcolumns() != 3) || (m2.getrows() != 3)){
         printf("Columns of first matrix must match rows of second!\n");
         return retval;
@@ -937,11 +936,29 @@ Matrix<> m2x3by3x1(Matrix<> m1, Matrix<> m2){
     return retval;
 }
 
+Matrix<float> m3x3by3x1(Matrix<float> m1, Matrix<float> m2){
+    Matrix<float> retval(3, 1);
+    if((m1.getcolumns() != 3) || (m2.getrows() != 3)){
+        printf("Columns of first matrix must match rows of second!\n");
+        return retval;
+    }
+    retval.elements[0][0] = ((m1.elements[0][0] * m2.elements[0][0]) +
+                             (m1.elements[0][1] * m2.elements[0][0]) +
+                             (m1.elements[0][2] * m2.elements[0][0]));
+    retval.elements[1][0] = ((m1.elements[1][0] * m2.elements[1][0]) +
+                             (m1.elements[1][1] * m2.elements[1][0]) +
+                             (m1.elements[1][2] * m2.elements[1][0]));
+    retval.elements[2][0] = ((m1.elements[2][0] * m2.elements[2][0]) +
+                             (m1.elements[2][1] * m2.elements[2][0]) +
+                             (m1.elements[2][2] * m2.elements[2][0]));                             
+    return retval;
+}
+
 void cube_demo(void){
     clear_buffer(screen_buffer);
     draw_buffer(screen_buffer);
 
-    std::vector<std::vector<uint8_t>> orthogonal_projection_matrix = {
+    std::vector<std::vector<float>> orthogonal_projection_matrix = {
         {1, 0, 0},
         {0, 1, 0},
     };
@@ -953,8 +970,12 @@ void cube_demo(void){
     points[3].set(20, 40, 0);
 
     Point projected_point;
-    Matrix<> projected_matrix(2, 1);
+    Matrix<float> projected_matrix(2, 1);
     for(int i = 0; i < 4; i++){
+        // Rotate the point
+        
+
+        // Project the point
         projected_matrix = m2x3by3x1(orthogonal_projection_matrix, points[i].to_matrix());
         projected_point.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0]);
         shade_px(screen_buffer, SHADE_SOLID, projected_point.getx(), projected_point.gety());
