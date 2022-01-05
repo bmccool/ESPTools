@@ -15,6 +15,8 @@
 #include "esp_system.h"
 #include "esp_spi_flash.h"
 #include <cmath> // std::abs
+#include <vector> // std::vector
+#include <iostream> // cin, cout
 
 //I2C_MASTER_SDA
 //I2C_MASTER_SCL
@@ -77,9 +79,10 @@ class Point {
         uint8_t x, y;
 
     public:
-        Point(uint8_t x0, uint8_t y0){
+        Point(uint8_t x0 = 0, uint8_t y0 = 0){
             set(x0, y0);
         }
+        
 
         void set(uint8_t x0, uint8_t y0){
             x = x0;
@@ -94,6 +97,158 @@ class Point {
             return y;
         }        
 };
+
+class Point3 { //TODO could this inherit from Point?
+    private:
+        uint8_t x, y, z;
+
+    public:
+        Point3(uint8_t x0 = 0, uint8_t y0 = 0, uint8_t z0 = 0){
+            set(x0, y0, z0);
+        }
+        
+
+        void set(uint8_t x0, uint8_t y0, uint8_t z0){
+            x = x0;
+            y = y0;
+            z = z0;
+        }
+
+        uint8_t getx(){
+            return x;
+        }
+
+        uint8_t gety(){
+            return y;
+        }
+
+        uint8_t getz(){
+            return z;
+        }
+
+        std::vector<std::vector<uint8_t>> to_matrix(){
+            std::vector<std::vector<uint8_t>> retval = {{x},
+                                                        {y},
+                                                        {z}};
+            return retval;
+        }  
+};
+
+template <class T = uint8_t> // Default element type is uint8_t
+class Matrix {
+    private:
+        unsigned int rows, columns;
+        
+
+    public:
+        std::vector<std::vector<T>> elements;
+
+        // Initialize with a vector of vectors
+        Matrix(std::vector<std::vector<T>> elements): rows(elements.size()), columns(elements[0].size()), elements(elements){}
+
+        Matrix(unsigned int rows, unsigned int columns): rows(rows), columns(columns), elements(std::vector<std::vector<T>> (rows, std::vector<T>(columns, 0))){}
+        // Initialize (to empty) with size of (row, col)
+        //Matrix(int rows, int columns): 
+        unsigned int getcolumns(){
+            return columns;
+        }
+
+        unsigned int getrows(){
+            return rows;
+        }
+
+        void print(void){
+            printf("Size %d x %d\n", getrows(), getcolumns());
+            printf("===============================\n");
+            for(int i = 0; i < getrows(); i++){
+                for(int j = 0; j < getcolumns(); j++){
+                    printf("%d ", elements[i][j]);
+                }
+                printf("\n");
+            }
+            printf("===============================\n\n");
+        }
+};
+
+class RotationMatrix3 : public Matrix<float>{
+    public:
+        float angle;
+        RotationMatrix3(float angle = 0): Matrix<float>(3, 3), angle(angle){update();}
+
+        virtual void update(void){
+            std::cout << "Update the rotation matrix based on the angle." << std::endl;
+        }
+}; // RotationMatrix3
+
+class RotationMatrixZ : public RotationMatrix3{
+    public:
+        void update(void){
+            elements[0][0] =  cos(angle);
+            elements[0][1] = -sin(angle);
+            elements[0][2] =  0;
+
+            elements[1][0] =  sin(angle);
+            elements[1][1] =  cos(angle);
+            elements[1][2] =  0;
+
+            elements[2][0] =  0;
+            elements[2][1] =  0;
+            elements[2][2] =  1;
+        }
+};
+
+class RotationMatrixY : public RotationMatrix3{
+    public:
+        void update(void){
+            elements[0][0] =  cos(angle);
+            elements[0][1] =  0;
+            elements[0][2] =  sin(angle);
+
+            elements[1][0] =  0;
+            elements[1][1] =  1;
+            elements[1][2] =  0;
+
+            elements[2][0] = -sin(angle);
+            elements[2][1] =  0;
+            elements[2][2] =  cos(angle);
+        }
+};
+
+class RotationMatrixX : public RotationMatrix3{
+    public:
+        void update(void){
+            elements[0][0] =  1;
+            elements[0][1] =  0;
+            elements[0][2] =  0;
+
+            elements[1][0] =  0;
+            elements[1][1] =  cos(angle);
+            elements[1][2] = -sin(angle);
+
+            elements[2][0] =  0;
+            elements[2][1] =  sin(angle);
+            elements[2][2] =  cos(angle);
+        }
+};
+
+
+class RotationMatrix2{
+    // Rotation Matrix will always be 2x2
+    // TODO get a good templateable base matrix, PLEASE
+    private:
+        float angle_x;
+
+    public:
+        std::vector<std::vector<float>> elements;
+        RotationMatrix2(float x = 0): angle_x(x){update();}
+
+        void update(void){
+            elements[0][0] =  cos(angle_x);
+            elements[0][1] = -sin(angle_x);
+            elements[1][0] =  sin(angle_x);
+            elements[1][1] =  cos(angle_x);
+        }
+}; // RotationMatrix2
 
 static esp_err_t i2c_master_init(void)
 {
@@ -704,7 +859,6 @@ void draw_line_to_fill_buffers(Point p0, Point p1, uint8_t* lbuf, uint8_t* rbuf)
     buffer[p1.gety()] = p1.getx();
 }
 
-
 void print_buffers(uint8_t* lbuffer, uint8_t* rbuffer){
     printf("Y   LBUFFER RBUFFER\n");
     for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
@@ -744,11 +898,69 @@ void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer, uint8_t shade){
             draw_shaded_line_to_buffer(Point(buf_left[i], i), Point(buf_right[i], i), shade);
         }
     }
-
-
 }
 
+Matrix<> matrix_multiply(Matrix<> m1, Matrix<> m2){
+    // todo dynamic size of retval
+    Matrix<> retval(2, 1);
 
+    if(m1.elements[0].size() != m2.elements.size()) {
+        printf("Columns of first matrix must match rows of second!\n");
+        return retval;
+    }
+
+    int sum = 0;
+    for(int i = 0; i < m1.getrows(); i++){
+        for(int j = 0; j < m2.getcolumns(); j++){
+            sum = 0;
+            for(int k = 0; k < m1.getcolumns(); k++){
+                sum += m1.elements[i][k] * m2.elements[k][j];
+            }
+            retval.elements[i][j] = sum;
+        }
+    }
+    return retval;
+}
+
+Matrix<> m2x3by3x1(Matrix<> m1, Matrix<> m2){
+    Matrix<> retval(2, 1);
+    if((m1.getcolumns() != 3) || (m2.getrows() != 3)){
+        printf("Columns of first matrix must match rows of second!\n");
+        return retval;
+    }
+    retval.elements[0][0] = ((m1.elements[0][0] * m2.elements[0][0]) +
+                             (m1.elements[0][1] * m2.elements[0][0]) +
+                             (m1.elements[0][2] * m2.elements[0][0]));
+    retval.elements[1][0] = ((m1.elements[1][0] * m2.elements[1][0]) +
+                             (m1.elements[1][1] * m2.elements[1][0]) +
+                             (m1.elements[1][2] * m2.elements[1][0]));
+    return retval;
+}
+
+void cube_demo(void){
+    clear_buffer(screen_buffer);
+    draw_buffer(screen_buffer);
+
+    std::vector<std::vector<uint8_t>> orthogonal_projection_matrix = {
+        {1, 0, 0},
+        {0, 1, 0},
+    };
+
+    Point3 points[4];
+    points[0].set(20, 20, 0);
+    points[1].set(40, 20, 0);
+    points[2].set(40, 40, 0);
+    points[3].set(20, 40, 0);
+
+    Point projected_point;
+    Matrix<> projected_matrix(2, 1);
+    for(int i = 0; i < 4; i++){
+        projected_matrix = m2x3by3x1(orthogonal_projection_matrix, points[i].to_matrix());
+        projected_point.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0]);
+        shade_px(screen_buffer, SHADE_SOLID, projected_point.getx(), projected_point.gety());
+    }
+    draw_buffer(screen_buffer);
+}
 
 void app_main(void)
 {
@@ -783,6 +995,7 @@ void app_main(void)
     ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
 
     // Demo draw tri
+    /*
     uint8_t shade = 0;
     uint8_t direction = 1;
     while(true){
@@ -795,9 +1008,10 @@ void app_main(void)
         shade += direction;
         if(shade == SHADE_SOLID) direction = -1;
         if(shade == SHADE_EMPTY) direction = 1;
-
     }
+    */
 
+    cube_demo();
 
     /* // demo draw lines
     clear_buffer(screen_buffer);
