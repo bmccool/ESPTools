@@ -640,9 +640,9 @@ void write_px_to_buffer(uint16_t px, uint8_t* buffer){
 }
 
 bool coord_is_drawable(int x, int y){
-    if((x > FRAME_X_RESOLUTION) ||
+    if((x > FRAME_X_RESOLUTION - 1) ||
        (x < 0) ||
-       (y > FRAME_Y_RESOLUTION) ||
+       (y > FRAME_Y_RESOLUTION - 1) ||
        (y < 0)){
            return false;
        }
@@ -828,6 +828,7 @@ void draw_solid_line_to_buffer(Point p0, Point p1, uint8_t* buffer){
 
 void buffer_wrapper(uint8_t* buffer, int index, int value){
     //printf("buffer[%d] = %d\n", index, value);
+    //if(index == 64 || index == 0) printf("==========================");
     buffer[index] = value;
 }
 
@@ -849,7 +850,7 @@ void draw_line_to_fill_buffers(Point p0, Point p1, uint8_t* lbuf, uint8_t* rbuf)
    // x range 66
    // y range 63, y is increasing, x is decreasing, line is longer in horizontal
     float slope;
-    if(p0.gety() == p1.gety()) { // Simple case, min_x to lbuf and max_x to rbuf
+    if((p0.gety() == p1.gety()) && (p0.gety() < FRAME_Y_RESOLUTION)) { // Simple case, min_x to lbuf and max_x to rbuf
         if(p0.getx() > p1.getx()) {
             buffer_wrapper(rbuf, p0.gety(), p0.getx());
             buffer_wrapper(lbuf, p0.gety(), p1.getx());
@@ -913,6 +914,7 @@ void draw_line_to_fill_buffers(Point p0, Point p1, uint8_t* lbuf, uint8_t* rbuf)
         slope = ((float)(p1.getx() - p0.getx()) / (p1.gety() - p0.gety()));        
         if(p0.gety() < p1.gety()){
             for(int y = p0.gety(); y < p1.gety(); y++){
+                //printf("(%f, %d)\n", x, y);
                 if(coord_is_drawable((int)x, (int)y)) buffer_wrapper(buffer, (uint8_t)y, x);
                 x += slope;
             }
@@ -958,6 +960,13 @@ class Line {
 
 }; // Line
 
+void print_buffers(uint8_t* lbuffer, uint8_t* rbuffer){
+    printf("Y   LBUFFER RBUFFER\n");
+    for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
+        printf("%d:  %d,  %d\n", i, lbuffer[i], rbuffer[i]);
+    }
+}
+
 void fill_quad(Point p1, Point p2, Point p3, Point p4, uint8_t* buffer, uint8_t shade){
     // TODO COPIED FROM fill_tri
     //printf("(%d, %d)\n", p1.getx(), p1.gety());
@@ -982,12 +991,12 @@ void fill_quad(Point p1, Point p2, Point p3, Point p4, uint8_t* buffer, uint8_t 
     if line Y is neither increasing nor decreasing
         min x of line to left buffer, max x of line to right buffer
     */
-    uint8_t buf_left[FRAME_Y_RESOLUTION] = { }, buf_right[FRAME_Y_RESOLUTION] = { }; 
+    uint8_t buf_left[FRAME_Y_RESOLUTION] = { }, buf_right[FRAME_Y_RESOLUTION] = { };
     draw_line_to_fill_buffers(p1, p2, buf_left, buf_right);
     draw_line_to_fill_buffers(p2, p3, buf_left, buf_right);
     draw_line_to_fill_buffers(p3, p4, buf_left, buf_right);
     draw_line_to_fill_buffers(p4, p1, buf_left, buf_right);
-    for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
+    for(int i = 0; i < (FRAME_Y_RESOLUTION - 1); i++){
         if(buf_left[i] != buf_right[i]){
             draw_shaded_line_to_buffer(Point(buf_left[i], i), Point(buf_right[i], i), buffer, shade);
         }
@@ -1018,7 +1027,7 @@ class Quad {
         }
 
         Quad operator + (Point3 p){
-            return Quad(p1 + p, p2 + p, p3 + p, p4 + p);
+            return Quad(p1 + p, p2 + p, p3 + p, p4 + p, shade);
         }
 
         Quad project(Matrix<float> projection_matrix){
@@ -1038,7 +1047,7 @@ class Quad {
             projected_matrix = m2x3by3x1(projection_matrix, p4.to_matrix());
             projected_p4.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0], 0);                        
 
-            return Quad(projected_p1, projected_p2, projected_p3, projected_p4);
+            return Quad(projected_p1, projected_p2, projected_p3, projected_p4, shade);
         }   
 
         void draw_to(uint8_t* buffer){
@@ -1047,13 +1056,6 @@ class Quad {
         }
 
 }; // Quad
-
-void print_buffers(uint8_t* lbuffer, uint8_t* rbuffer){
-    printf("Y   LBUFFER RBUFFER\n");
-    for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
-        printf("%d:  %d,  %d\n", i, lbuffer[i], rbuffer[i]);
-    }
-}
 
 void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer, uint8_t shade){
     //printf("(%d, %d)\n", p1.getx(), p1.gety());
@@ -1211,7 +1213,7 @@ class Sprite{
             Quad rotated_quad(rotate_point(m, q.p1),
                               rotate_point(m, q.p2),
                               rotate_point(m, q.p3),
-                              rotate_point(m, q.p4));
+                              rotate_point(m, q.p4), q.shade);
             return rotated_quad;
         }
 
@@ -1425,26 +1427,22 @@ void demo_rotate_shaded_cube(uint8_t* buffer){
     // Right hand pointint forward would be
     // Bottom left -> Bottom right -> Top Right -> Top Left
     // p2 -> p6 -> p8 -> p4
-    cube.create_quad(p2, p6, p8, p4, SHADE_SOLID);
-
-    // Back -> Positive Z p1, p3, p5, p7
-    //cube.create_quad(p1, p2, p3, p4);
+    cube.create_quad(p4, p8, p6, p2, SHADE_SOLID); // Front
+    cube.create_quad(p5, p7, p3, p1, 2); // Back
+    cube.create_quad(p3, p7, p8, p4, 4); // Top
+    cube.create_quad(p2, p6, p5, p1, 6); // Bottom
+    cube.create_quad(p1, p3, p4, p2, 8); // Left
+    cube.create_quad(p5, p6, p8, p7, 10); // Right
     
-    //cube.create_quad(p1, p2, p3, p4);
-    //cube.create_quad(p1, p2, p3, p4);
-    //cube.create_quad(p1, p2, p3, p4);
-    //cube.create_quad(p1, p2, p3, p4);
-
-
     std::vector<std::vector<float>> orthogonal_projection_matrix = {
         {1, 0, 0},
         {0, 1, 0},
     };    
 
-    cube.origin = Point3(64, 64, 0);
+    //cube.origin = Point3(64, 64, 0);
 
     while(true){
-        std::cout << cube.angle_x << " " << cube.angle_y << " " << cube.angle_z << std::endl;
+        //std::cout << cube.angle_x << " " << cube.angle_y << " " << cube.angle_z << std::endl;
         clear_buffer(buffer);
         cube.render(orthogonal_projection_matrix, buffer);
         draw_buffer(buffer);
