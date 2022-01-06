@@ -990,7 +990,6 @@ void fill_quad(Point p1, Point p2, Point p3, Point p4, uint8_t* buffer, uint8_t 
     for(int i = 0; i < FRAME_Y_RESOLUTION; i++){
         if(buf_left[i] != buf_right[i]){
             draw_shaded_line_to_buffer(Point(buf_left[i], i), Point(buf_right[i], i), buffer, shade);
-            draw_buffer(buffer);
         }
     }
 }
@@ -1263,25 +1262,20 @@ class Sprite{
             }
             for(int i = 0; i < quads.size(); i++){
                 // Rotate the quad
-                printf("High Water Mark: %d\n", uxTaskGetStackHighWaterMark(NULL));
                 Quad rotated_quad = rotate_quad(rotation_matrix_z, quads[i]);
                 rotated_quad = rotate_quad(rotation_matrix_y, rotated_quad);
                 rotated_quad = rotate_quad(rotation_matrix_x, rotated_quad);
 
                 // Check outward size is towards POV, else skip drawing
-                printf("High Water Mark: %d\n", uxTaskGetStackHighWaterMark(NULL));
                 if(rotated_quad.is_forward_facing()){
 
                     // Cast to absolute coordinates
-                    printf("High Water Mark: %d\n", uxTaskGetStackHighWaterMark(NULL));
                     Quad absolute_quad = rotated_quad + origin;
 
                     // Project from 3D -> 2D
-                    printf("High Water Mark: %d\n", uxTaskGetStackHighWaterMark(NULL));
                     Quad projected_quad = absolute_quad.project(projection_matrix);
 
                     // Draw to buffer
-                    printf("High Water Mark: %d\n", uxTaskGetStackHighWaterMark(NULL));
                     projected_quad.draw_to(buffer);
                 }
             }            
@@ -1447,20 +1441,14 @@ void demo_rotate_shaded_cube(uint8_t* buffer){
         {0, 1, 0},
     };    
 
-
-    cube.angle_x = 4.2237;
-    cube.angle_y = 21.1185;
-    cube.angle_z = 10.5593;
+    cube.origin = Point3(64, 64, 0);
 
     while(true){
         std::cout << cube.angle_x << " " << cube.angle_y << " " << cube.angle_z << std::endl;
         clear_buffer(buffer);
-        printf("Rendering Cube\n");
         cube.render(orthogonal_projection_matrix, buffer);
-        printf("Drawing Buffer\n");
         draw_buffer(buffer);
 
-        printf("Updating Angles\n");
         cube.angle_x = cube.angle_x + (2 * PI / 180);
         cube.angle_y = cube.angle_y + (10 * PI / 180);
         cube.angle_z = cube.angle_z + (5 * PI / 180);
