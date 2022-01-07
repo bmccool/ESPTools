@@ -76,6 +76,8 @@ static const uint8_t shade8x8[17*8]= // 17 shade patterns 8x8 pixels
 
 // 8 pages, 8 bytes tall, 128 px wide
 static uint8_t screen_buffer[(128 * 8)];
+#define I2C_BUFFER_SIZE ((128 * 8 * 2) + 1)
+static uint8_t i2c_buffer[I2C_BUFFER_SIZE];
 
 template <class T = uint8_t> // Default element type is uint8_t
 class Matrix {
@@ -688,21 +690,11 @@ void fill_buffer(uint8_t* buffer){
 
 void draw_buffer(uint8_t* buffer){
     uint8_t data[2];
-    for(int i = 0; i < (128 * 8); i++){
-        data[0] = 0x40;
-        data[1] = buffer[i];
-        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    for(int i = 0, j = 0; i < I2C_BUFFER_SIZE; i+=2, j++){
+        i2c_buffer[i] = 0x40;
+        i2c_buffer[i+1] = buffer[j];
     }
-}
-
-void draw_buffer2(uint8_t* buffer){
-    uint8_t data[2];
-    for(int i = 0; i < (128 * 8); i++){
-        data[0] = 0x40;
-        data[1] = buffer[i];
-        //data[1] = 0x3C;
-        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-    }
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, i2c_buffer, I2C_BUFFER_SIZE, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
 }
 
 void draw_buffer_slowly(uint8_t* buffer, uint8_t delay_ms){
