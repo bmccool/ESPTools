@@ -76,7 +76,7 @@ static const uint8_t shade8x8[17*8]= // 17 shade patterns 8x8 pixels
 
 // 8 pages, 8 bytes tall, 128 px wide
 static uint8_t screen_buffer[(128 * 8)];
-#define I2C_BUFFER_SIZE ((128 * 8 * 2) + 1)
+#define I2C_BUFFER_SIZE ((128 * 8) + 1)
 static uint8_t i2c_buffer[I2C_BUFFER_SIZE];
 
 template <class T = uint8_t> // Default element type is uint8_t
@@ -689,11 +689,18 @@ void fill_buffer(uint8_t* buffer){
 }
 
 void draw_buffer(uint8_t* buffer){
-    uint8_t data[2];
-    for(int i = 0, j = 0; i < I2C_BUFFER_SIZE; i+=2, j++){
-        i2c_buffer[i] = 0x40;
-        i2c_buffer[i+1] = buffer[j];
-    }
+    //uint8_t data[2];
+    //for(int i = 0, j = 0; i < I2C_BUFFER_SIZE; i+=2, j++){
+    //    i2c_buffer[i] = 0x40;
+    //    i2c_buffer[i+1] = buffer[j];
+    //}
+    i2c_buffer[0] = 0x40;
+    for(int i = 1; i < I2C_BUFFER_SIZE; i++){
+        i2c_buffer[i] = buffer[i-1];
+    }    
+    //printf("I2CBUFFER[0]: ");
+    //for(int i = 0; i < 6; i++){printf("%d ", i2c_buffer[i]);}
+    //printf("\n");
     ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, i2c_buffer, I2C_BUFFER_SIZE, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
 }
 
@@ -1460,7 +1467,8 @@ void demo_seizure_warning(uint8_t* buffer){
         stop = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
         fps = 1.0 / ((float)duration.count() / (1000000)); // Cast to seconds
-        std::cout << "FPS: " << fps << std::endl;  
+        std::cout << "FPS: " << fps << std::endl;
+        //vTaskDelay(1000 / portTICK_PERIOD_MS);
         
         clear_buffer(buffer);
         start = std::chrono::high_resolution_clock::now();
@@ -1468,7 +1476,8 @@ void demo_seizure_warning(uint8_t* buffer){
         stop = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
         fps = 1.0 / ((float)duration.count() / (1000000)); // Cast to seconds
-        std::cout << "FPS: " << fps << std::endl;  
+        std::cout << "FPS: " << fps << std::endl;
+        //vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
 
@@ -1524,8 +1533,8 @@ void app_main(void)
     //cube_demo();
     //demo_rotate_box_z();
     //demo_rotate_cube(screen_buffer);
-    //demo_rotate_shaded_cube(screen_buffer);
-    demo_seizure_warning(screen_buffer);
+    demo_rotate_shaded_cube(screen_buffer);
+    //demo_seizure_warning(screen_buffer);
 
     //clear_buffer(screen_buffer);
     //draw_buffer(screen_buffer);
