@@ -17,6 +17,7 @@
 #include <cmath> // std::abs
 #include <vector> // std::vector
 #include <iostream> // cin, cout
+#include <chrono> // function timing/metrics
 
 //I2C_MASTER_SDA
 //I2C_MASTER_SCL
@@ -1003,7 +1004,6 @@ void fill_quad(Point p1, Point p2, Point p3, Point p4, uint8_t* buffer, uint8_t 
     }
 }
 
-
 class Quad {
     // A quad is defined as four points.  It represents a surface created by
     // joining those points with lines in order: p1 -> p2 -> p3 -> p4 -> p1.
@@ -1453,6 +1453,32 @@ void demo_rotate_shaded_cube(uint8_t* buffer){
     }
 }
 
+void demo_seizure_warning(uint8_t* buffer){
+    auto start = std::chrono::high_resolution_clock::now();
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    float fps;
+    std::cout << duration.count() << std::endl;
+
+    while(true){
+
+        fill_buffer(buffer);
+        start = std::chrono::high_resolution_clock::now();
+        draw_buffer(buffer);
+        stop = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        fps = 1.0 / ((float)duration.count() / (1000000)); // Cast to seconds
+        std::cout << "FPS: " << fps << std::endl;  
+        
+        clear_buffer(buffer);
+        start = std::chrono::high_resolution_clock::now();
+        draw_buffer(buffer);
+        stop = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        fps = 1.0 / ((float)duration.count() / (1000000)); // Cast to seconds
+        std::cout << "FPS: " << fps << std::endl;  
+    }
+}
 
 void app_main(void)
 {
@@ -1506,7 +1532,8 @@ void app_main(void)
     //cube_demo();
     //demo_rotate_box_z();
     //demo_rotate_cube(screen_buffer);
-    demo_rotate_shaded_cube(screen_buffer);
+    //demo_rotate_shaded_cube(screen_buffer);
+    demo_seizure_warning(screen_buffer);
 
     //clear_buffer(screen_buffer);
     //draw_buffer(screen_buffer);
