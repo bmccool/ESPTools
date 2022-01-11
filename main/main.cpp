@@ -29,7 +29,7 @@ static const char *TAG = "esp-oled";
 #define I2C_MASTER_SCL_IO           CONFIG_I2C_MASTER_SCL      /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO           CONFIG_I2C_MASTER_SDA      /*!< GPIO number used for I2C master data  */
 #define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
-#define I2C_MASTER_FREQ_HZ          400000                     /*!< I2C master clock frequency */
+#define I2C_MASTER_FREQ_HZ          1000000                     /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_TIMEOUT_MS       1000
@@ -301,16 +301,6 @@ static esp_err_t i2c_master_init(void)
 {
     int i2c_master_port = I2C_MASTER_NUM;
 
-    /* TODO why doesn't this work???
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = 11,
-        .scl_io_num = 10,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = I2C_MASTER_FREQ_HZ,
-    };
-    */
     i2c_config_t conf;
     conf.mode = I2C_MODE_MASTER;
     conf.sda_io_num = 11;
@@ -322,196 +312,6 @@ static esp_err_t i2c_master_init(void)
     i2c_param_config(i2c_master_port, &conf);
 
     return i2c_driver_install(i2c_master_port, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-}
-
-void oled_init_1(void)
-{
-    uint8_t data[2];
-    // Set MUX Ratio A8h, 3Fh 
-    // BAM TODO: Something to do with frame refresh?
-    data[0] = 0xA8;
-    data[1] = 0x3F;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Display Offset D3h, 00h 
-    // BAM TODO: Set veritical shift, what?  00 is set after reset, so this is just ensuring default value?
-    data[0] = 0xD3;
-    data[1] = 0x00;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Display Start Line 40h
-    data[0] = 0x40;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Segment re-map A0h/A1h
-    // A0 means column address 0 is mapped to SEG0 BAM TODO what???
-    data[0] = 0xA0;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set COM Output Scan Direction C0h/C8h 
-    // BAM: C0 is normal (default) COM0 -> COM[N-1], C8 is remapped, COM[N-1] -> COM0.  N is multiplex ratio
-    data[0] = 0xC0;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set COM Pins hardware configuration DAh, 02
-    // Alternative COM pin configuration, Enable COM Left/Right remap
-    data[0] = 0xDA; 
-    data[1] = 0x02;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Contrast Control 81h, 7Fh
-    // Set [1-256] contrast steps.  Default is 7F
-    data[0] = 0x81;
-    data[1] = 0x7F;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Entire Display On A4h
-    data[0] = 0xA4;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Normal Display A6h
-    // BAM: As opposed to INVERSE display
-    data[0] = 0xA6;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Osc Frequency D5h, 80h
-    // Set Display Clock Divide Ratio/Oscillator Frequency
-    // Lower 4 bits define divide ration D of the display clocks (DCLK) - default is 0000, but it's + 1 (cant have 0) so 1
-    // Upper 4 bits set oscillator frequency fosc.  Default is 1000b 
-    data[0] = 0xD5;
-    data[1] = 0x80;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Enable charge pump regulator 8Dh, 14h
-    // 14 enables charge pump during displayu on
-    data[0] = 0x8D;
-    data[1] = 0x14;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Display On AFh
-    data[0] = 0xAF;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Normal Display A6h
-    // BAM: As opposed to INVERSE display
-    //data[0] = 0xA7;
-    //ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Turn something on
-}
-
-void oled_init_2(void){
-    uint8_t data[4];
-    // Display Off
-    data[0] = 0xAE;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Osc Frequency D5h, 80h
-    // Set Display Clock Divide Ratio/Oscillator Frequency
-    // Lower 4 bits define divide ration D of the display clocks (DCLK) - default is 0000, but it's + 1 (cant have 0) so 1
-    // Upper 4 bits set oscillator frequency fosc.  Default is 1000b 
-    data[0] = 0xD5;
-    data[1] = 0x80;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set MUX Ratio A8h, 3Fh 
-    // BAM TODO: Something to do with frame refresh?
-    data[0] = 0xA8;
-    data[1] = 0x3F;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Display Offset D3h, 00h 
-    // BAM TODO: Set veritical shift, what?  00 is set after reset, so this is just ensuring default value?
-    data[0] = 0xD3;
-    data[1] = 0x00;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Display Start Line 40h
-    data[0] = 0x40;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Enable charge pump regulator 8Dh, 14h
-    // 14 enables charge pump during displayu on
-    data[0] = 0x8D;
-    data[1] = 0x14;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Memory Mode
-    // 00 HORIZONTAL ADDRESSING MODE - Page addressing mode is 02 and default, but this follows adafruit
-    data[0] = 0x20; 
-    data[1] = 0x00;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
-
-    // Set Segment re-map A0h/A1h
-    // A0 means column address 0 is mapped to SEG0 BAM TODO what???
-    data[0] = 0xA1;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set COM Output Scan Direction C0h/C8h 
-    // BAM: C0 is normal (default) COM0 -> COM[N-1], C8 is remapped, COM[N-1] -> COM0.  N is multiplex ratio
-    data[0] = 0xC8;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set COM Pins hardware configuration DAh, 02
-    data[0] = 0xDA; 
-    data[1] = 0x12;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Contrast Control 81h, 7Fh
-    // Set [1-256] contrast steps.  Default is 7F
-    data[0] = 0x81;
-    data[1] = 0xCF;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Pre-charge Period D9 F1 
-    data[0] = 0xD9;
-    data[1] = 0xF1;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
-
-    // Set VCOMH Deselect Level DB 40
-    data[0] = 0xDB;
-    data[1] = 0x40;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));        
-
-    // Entire Display On (resume) A4h
-    data[0] = 0xA4;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Normal Display A6h
-    // BAM: As opposed to INVERSE display
-    data[0] = 0xA6;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Deactivate Scroll
-    data[0] = 0x2E;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
-
-    // Display On AFh
-    data[0] = 0xAF;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 1, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Turn something on
-    // WHITE is 1, BLACK is 0
-    // Set Page Address 22 00 FF
-    data[0] = 0x22;
-    data[1] = 0x00;
-    data[2] = 0x07;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    // Set Column Address 21 0 7 TODO 3rd arg is set to WIDTH - 1, that should be 128-1=127 => 0x7F
-    data[0] = 0x21;
-    data[1] = 0x00;
-    data[2] = 0x7F;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-
-    uint16_t count = 128 * ((64 + 7) / 8);
-    while (count) {
-        data[0] = 0x7F;
-        data[1] = 0xFF;
-        data[2] = 0xFF;
-        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-        count -= 2;
-    }
 }
 
 void oled_init(void){
@@ -689,18 +489,10 @@ void fill_buffer(uint8_t* buffer){
 }
 
 void draw_buffer(uint8_t* buffer){
-    //uint8_t data[2];
-    //for(int i = 0, j = 0; i < I2C_BUFFER_SIZE; i+=2, j++){
-    //    i2c_buffer[i] = 0x40;
-    //    i2c_buffer[i+1] = buffer[j];
-    //}
     i2c_buffer[0] = 0x40;
     for(int i = 1; i < I2C_BUFFER_SIZE; i++){
         i2c_buffer[i] = buffer[i-1];
     }    
-    //printf("I2CBUFFER[0]: ");
-    //for(int i = 0; i < 6; i++){printf("%d ", i2c_buffer[i]);}
-    //printf("\n");
     ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, i2c_buffer, I2C_BUFFER_SIZE, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
 }
 
@@ -1282,8 +1074,30 @@ class Sprite{
             }            
         }
 
-
 }; // Sprite
+
+class Cube : public Sprite{
+    public:
+        int radius;
+        Cube(int radius, Point3 origin = Point3(64, 32, 0)): Sprite(origin), radius(radius){
+            Point3 p1(-radius, -radius, -radius);
+            Point3 p2(-radius, -radius,  radius);
+            Point3 p3(-radius,  radius, -radius);
+            Point3 p4(-radius,  radius,  radius);
+            Point3 p5( radius, -radius, -radius);
+            Point3 p6( radius, -radius,  radius);
+            Point3 p7( radius,  radius, -radius);
+            Point3 p8( radius,  radius,  radius);
+
+            create_quad(p4, p8, p6, p2, SHADE_SOLID); // Front
+            create_quad(p5, p7, p3, p1, 2); // Back
+            create_quad(p3, p7, p8, p4, 4); // Top
+            create_quad(p2, p6, p5, p1, 6); // Bottom
+            create_quad(p1, p3, p4, p2, 8); // Left
+            create_quad(p5, p6, p8, p7, 10); // Right
+        }
+}; // Cube
+
 
 void cube_demo(void){
     clear_buffer(screen_buffer);
@@ -1452,6 +1266,35 @@ void demo_rotate_shaded_cube(uint8_t* buffer){
     }
 }
 
+void demo_rotate_shaded_cubes(uint8_t* buffer){
+    clear_buffer(buffer);
+    draw_buffer(buffer);
+    Cube cube20(20, Point3(32, 32, 0));
+    Cube cube10(10, Point3(96, 32, 0));
+    
+    std::vector<std::vector<float>> orthogonal_projection_matrix = {
+        {1, 0, 0},
+        {0, 1, 0},
+    };    
+
+    //cube.origin = Point3(64, 64, 0);
+
+    while(true){
+        //std::cout << cube.angle_x << " " << cube.angle_y << " " << cube.angle_z << std::endl;
+        clear_buffer(buffer);
+        cube20.render(orthogonal_projection_matrix, buffer);
+        cube10.render(orthogonal_projection_matrix, buffer);
+        draw_buffer(buffer);
+
+        cube20.angle_x = cube20.angle_x + (2 * PI / 180);
+        cube20.angle_y = cube20.angle_y + (10 * PI / 180);
+        cube20.angle_z = cube20.angle_z + (5 * PI / 180);
+        cube10.angle_x = cube10.angle_x + (1 * PI / 180);
+        cube10.angle_y = cube10.angle_y + (5 * PI / 180);
+        cube10.angle_z = cube10.angle_z + (5 * PI / 180);        
+    }
+}
+
 void demo_seizure_warning(uint8_t* buffer){
     auto start = std::chrono::high_resolution_clock::now();
     auto stop = std::chrono::high_resolution_clock::now();
@@ -1468,7 +1311,6 @@ void demo_seizure_warning(uint8_t* buffer){
         duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
         fps = 1.0 / ((float)duration.count() / (1000000)); // Cast to seconds
         std::cout << "FPS: " << fps << std::endl;
-        //vTaskDelay(1000 / portTICK_PERIOD_MS);
         
         clear_buffer(buffer);
         start = std::chrono::high_resolution_clock::now();
@@ -1477,7 +1319,6 @@ void demo_seizure_warning(uint8_t* buffer){
         duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
         fps = 1.0 / ((float)duration.count() / (1000000)); // Cast to seconds
         std::cout << "FPS: " << fps << std::endl;
-        //vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
 
@@ -1533,8 +1374,9 @@ void app_main(void)
     //cube_demo();
     //demo_rotate_box_z();
     //demo_rotate_cube(screen_buffer);
-    demo_rotate_shaded_cube(screen_buffer);
-    //demo_seizure_warning(screen_buffer);
+    //demo_rotate_shaded_cube(screen_buffer);
+    //demo_rotate_shaded_cubes(screen_buffer);
+    demo_seizure_warning(screen_buffer);
 
     //clear_buffer(screen_buffer);
     //draw_buffer(screen_buffer);
@@ -1555,57 +1397,6 @@ void app_main(void)
     draw_buffer(screen_buffer);
     */
     
-    /* // Fill screen one horizontal line at a time
-    for (int y = 0; y < 64; y++){
-        //clear_buffer(screen_buffer);
-        draw_line(0, y,  127, y);
-        draw_buffer(screen_buffer);
-    }
-    */
-
-    /* // Wipe screen one column at a time
-    clear_buffer(screen_buffer);
-    draw_buffer(screen_buffer);
-    fill_buffer(screen_buffer);
-    draw_buffer_slowly(screen_buffer, 10);
-     */
-
-    //clear_buffer(screen_buffer);
-    //draw_buffer(screen_buffer);
-    //draw_line(0, 0,  127, 0);
-    //dump_buffer(screen_buffer);
-
-    /* // Shade demo
-    clear_buffer(screen_buffer);
-    draw_buffer(screen_buffer);
-    shade_demo(screen_buffer);
-    draw_buffer(screen_buffer);
-    */
-
-    /* 
-
-    for (int i = 0; i < 50; i++){
-        uint16_t count = 128 * ((64 + 7) / 8);
-        uint8_t b = 0x01;
-        while (count) {
-            data[0] = 0x40;
-            data[1] = b;
-            if (i % 2 == 0){
-                b = b << 1 | b >> 7; // Rotate left
-            }
-            else {
-                b = b >> 1 | b << 7; // Rotate right
-            }
-            ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
-            count -= 1;
-        }
-    }
-
-    */
-
-
-
-
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     ESP_ERROR_CHECK(i2c_driver_delete(I2C_MASTER_NUM));
     ESP_LOGI(TAG, "I2C unitialized successfully");
