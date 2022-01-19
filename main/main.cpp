@@ -19,6 +19,8 @@
 #include <iostream> // cin, cout
 #include <chrono> // function timing/metrics
 
+#include "LomontShape.h"
+
 //I2C_MASTER_SDA
 //I2C_MASTER_SCL
 
@@ -158,10 +160,8 @@ class Point {
 };
 
 class Point3 { //TODO could this inherit from Point?
-    private:
-        float x, y, z;
-
     public:
+        float x, y, z;
         Point3(float x0 = 0, float y0 = 0, float z0 = 0){
             set(x0, y0, z0);
         }
@@ -208,10 +208,18 @@ class Point3 { //TODO could this inherit from Point?
             return Point3(((gety() * p.getz()) - (getz() * p.gety())), 
                           ((getx() * p.getz()) - (getz() * p.getx())),
                           ((getx() * p.gety()) - (gety() * p.getx())));
-        }        
+        }
+
+        Point3 scale(float factor){
+            return Point3(x * factor, y * factor, z * factor);
+        }
 
         Point to_2d(void){
             return Point(x, y);
+        }
+
+        float length(void){
+            return std::sqrt((x * x) + (y * y) + (z * z));
         }
 };
 
@@ -848,6 +856,7 @@ class Quad {
 
 }; // Quad
 
+
 void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer, uint8_t shade){
     //printf("(%d, %d)\n", p1.getx(), p1.gety());
     //printf("(%d, %d)\n", p2.getx(), p2.gety());
@@ -881,6 +890,63 @@ void fill_tri(Point p1, Point p2, Point p3, uint8_t* buffer, uint8_t shade){
         }
     }
 }
+
+
+class Tri {
+    public:
+        Point3 p1, p2, p3;
+        uint8_t shade;
+
+        Tri(Point3 p1, Point3 p2, Point3 p3, uint8_t shade=SHADE_SOLID): p1(p1), p2(p2), p3(p3), shade(shade){}
+
+        bool is_forward_facing(void){
+            // TODO There is currently no care to ensure all points are on a plane
+            // So we will say the whole quad is forward facing if ANY of the three 
+            // cross products have negative Z (Face the camera)
+            if(((p2 - p1) * (p3 - p2)).getz() > 0) return true;
+            if(((p3 - p2) * (p1 - p3)).getz() > 0) return true;
+            if(((p1 - p3) * (p2 - p1)).getz() > 0) return true;
+            return false;
+        }
+
+        Tri operator + (Point3 p){
+            return Tri(p1 + p, p2 + p, p3 + p, shade);
+        }
+
+        void print(void){
+            printf("Triangle has points: \n");
+            p1.print();
+            p2.print();
+            p3.print();
+        }
+
+        Tri project(Matrix<float> projection_matrix){
+            // Project from 3D -> 2D using provided projection matrix
+            Matrix<float> projected_matrix(2, 1);
+            Point3 projected_p1, projected_p2, projected_p3;
+
+            projected_matrix = m2x3by3x1(projection_matrix, p1.to_matrix());
+            projected_p1.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0], 0);
+
+            projected_matrix = m2x3by3x1(projection_matrix, p2.to_matrix());
+            projected_p2.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0], 0);
+
+            projected_matrix = m2x3by3x1(projection_matrix, p3.to_matrix());
+            projected_p3.set(projected_matrix.elements[0][0], projected_matrix.elements[1][0], 0);                   
+
+            return Tri(projected_p1, projected_p2, projected_p3, shade);
+        }   
+
+        void draw_to(uint8_t* buffer){
+            fill_tri(p1.to_2d(), p2.to_2d(), p3.to_2d(), buffer, shade); // TODO can I make the "to_2d() less clunky?"
+            //draw_shaded_line_to_buffer(p1.to_2d(), p2.to_2d(), SHADE_SOLID); //TODO draw_shaded_line should be able to just take a line.
+        }
+
+        Tri operator * (float factor){ // Scale
+            return Tri(p1.scale(factor), p2.scale(factor), p3.scale(factor), shade);
+        }        
+
+}; // Tri
 
 Matrix<> matrix_multiply(Matrix<> m1, Matrix<> m2){
     // todo dynamic size of retval
@@ -944,7 +1010,7 @@ class Sprite{
         std::vector<Point3> points;
         std::vector<Line> lines;
         std::vector<Quad> quads;
-        // TODO Surfaces (Tris, Quads?)
+        std::vector<Tri> tris;
         Sprite(Point3 origin = Point3(64, 32, 0)): origin(origin), angle_x(0), angle_y(0), angle_z(0){}
         Sprite(float x, float y, float z): Sprite(Point3(x, y, z)){}
         
@@ -967,6 +1033,9 @@ class Sprite{
         void create_quad(Point3 p1, Point3 p2, Point3 p3, Point3 p4, uint8_t shade){
             quads.emplace_back(p1, p2, p3, p4, shade);
         }
+        void create_tri(Point3 p1, Point3 p2, Point3 p3, uint8_t shade){
+            tris.emplace_back(p1, p2, p3, shade);
+        }        
         // TODO who should hold the rotation matrix?
         // Should they be calculated at time rotate?
         // probably...
@@ -1007,6 +1076,14 @@ class Sprite{
                               rotate_point(m, q.p4), q.shade);
             return rotated_quad;
         }
+
+        Tri rotate_tri(RotationMatrix3 m, Tri t){
+            Tri rotated_tri(rotate_point(m, t.p1),
+                            rotate_point(m, t.p2),
+                            rotate_point(m, t.p3), t.shade);
+            return rotated_tri;
+        }        
+        
 
         void render(Matrix<float> projection_matrix, uint8_t* buffer){ // TODO should the projection matrix be held by the sprite?  Probably not...
             // For each thing to render, we need to rotate, then cast from relative (to origin) -> absolute position,
@@ -1071,7 +1148,39 @@ class Sprite{
                     // Draw to buffer
                     projected_quad.draw_to(buffer);
                 }
-            }            
+            }
+            for(int i = 0; i < tris.size(); i++){
+                // Rotate the tri
+                Tri rotated_tri = rotate_tri(rotation_matrix_z, tris[i]);
+                rotated_tri = rotate_tri(rotation_matrix_y, rotated_tri);
+                rotated_tri = rotate_tri(rotation_matrix_x, rotated_tri);
+
+                // Check outward size is towards POV, else skip drawing
+                if(rotated_tri.is_forward_facing()){
+
+                    // Cast to absolute coordinates
+                    Tri absolute_tri = rotated_tri + origin;
+
+                    // Project from 3D -> 2D
+                    Tri projected_tri = absolute_tri.project(projection_matrix);
+
+                    // Draw to buffer
+                    projected_tri.draw_to(buffer);
+                }
+            }                   
+        }
+
+        // TODO Why doesn't this work?
+        void scale(float factor){
+            for(auto p : points){
+                p = p.scale(factor);
+            }
+            //for(auto l : lines){
+            //    l = l * factor;
+            //}
+            for(auto t : tris){
+                t = t * factor;
+            }
         }
 
 }; // Sprite
@@ -1098,6 +1207,71 @@ class Cube : public Sprite{
         }
 }; // Cube
 
+Sprite get_lomont_shape(int choice){
+    Sprite sprite;
+    LomontShape lomontshape(choice);
+    for(int i = 0; i < lomontshape.points.size() - 2; i+=3){
+        sprite.create_point(lomontshape.points[i], lomontshape.points[i+1], lomontshape.points[i+2]);
+    }
+
+    // scale into unit radius sphere
+    auto max = 0.0f;
+    for (auto & v : sprite.points)
+    {
+        auto d = v.length();
+        max = std::max(d, max);			
+    }
+        printf("Max is: %f\n", max);
+    max = max * 0.6; // nicer scaling
+    for (auto& v : sprite.points)
+    {
+        v.x /= max;
+        v.y /= max;
+        v.z /= max;
+    } 
+
+    // TODO Scale this elsewhere
+    float factor = 20;
+    for (auto& v : sprite.points)
+    {
+        v.x *= factor;
+        v.y *= factor;
+        v.z *= factor;
+    }     
+
+    //for(int i = 1; i < lomontshape.faces.size() - 2; i+=4){
+    for(int i = 0; i < lomontshape.faces.size();){
+        if(lomontshape.faces[i] == 3){
+            sprite.create_tri(sprite.points[lomontshape.faces[i+1]],
+                              sprite.points[lomontshape.faces[i+2]],
+                              sprite.points[lomontshape.faces[i+3]], i % MAX_SHADES);
+            i += 4;
+        }
+        else if(lomontshape.faces[i] == 4){
+            sprite.create_quad(sprite.points[lomontshape.faces[i+1]],
+                               sprite.points[lomontshape.faces[i+2]],
+                               sprite.points[lomontshape.faces[i+3]],
+                               sprite.points[lomontshape.faces[i+4]], i % MAX_SHADES);
+            i += 5;
+        }
+        else if(lomontshape.faces[i] == 5){
+            sprite.create_quad(sprite.points[lomontshape.faces[i+1]],
+                               sprite.points[lomontshape.faces[i+2]],
+                               sprite.points[lomontshape.faces[i+3]],
+                               sprite.points[lomontshape.faces[i+4]], i % MAX_SHADES);
+            sprite.create_tri(sprite.points[lomontshape.faces[i+4]],
+                              sprite.points[lomontshape.faces[i+5]],
+                              sprite.points[lomontshape.faces[i+1]], i % MAX_SHADES);                                
+            i += 6;
+        }
+        else {
+            printf("Crap, can't make a face with %d points!!!\n", lomontshape.faces[i]);
+            i += (lomontshape.faces[i] + 1);
+        }
+    }    
+
+    return sprite;
+}
 
 void cube_demo(void){
     clear_buffer(screen_buffer);
@@ -1222,47 +1396,24 @@ void demo_rotate_cube(uint8_t* buffer){
     }
 }
 
-void demo_rotate_shaded_cube(uint8_t* buffer){
+void demo_lomont_shapes(uint8_t* buffer){
     clear_buffer(buffer);
     draw_buffer(buffer);
-    Sprite cube;
-    
-    Point3 p1(-20, -20, -20);
-    Point3 p2(-20, -20,  20);
-    Point3 p3(-20,  20, -20);
-    Point3 p4(-20,  20,  20);
-    Point3 p5( 20, -20, -20);
-    Point3 p6( 20, -20,  20);
-    Point3 p7( 20,  20, -20);
-    Point3 p8( 20,  20,  20);
-
-    // Front -> Negative Z p2, p4, p6, p8
-    // Right hand pointint forward would be
-    // Bottom left -> Bottom right -> Top Right -> Top Left
-    // p2 -> p6 -> p8 -> p4
-    cube.create_quad(p4, p8, p6, p2, SHADE_SOLID); // Front
-    cube.create_quad(p5, p7, p3, p1, 2); // Back
-    cube.create_quad(p3, p7, p8, p4, 4); // Top
-    cube.create_quad(p2, p6, p5, p1, 6); // Bottom
-    cube.create_quad(p1, p3, p4, p2, 8); // Left
-    cube.create_quad(p5, p6, p8, p7, 10); // Right
+    Sprite shape = get_lomont_shape(5);
     
     std::vector<std::vector<float>> orthogonal_projection_matrix = {
         {1, 0, 0},
         {0, 1, 0},
     };    
 
-    //cube.origin = Point3(64, 64, 0);
-
     while(true){
-        //std::cout << cube.angle_x << " " << cube.angle_y << " " << cube.angle_z << std::endl;
         clear_buffer(buffer);
-        cube.render(orthogonal_projection_matrix, buffer);
+        shape.render(orthogonal_projection_matrix, buffer);
         draw_buffer(buffer);
 
-        cube.angle_x = cube.angle_x + (2 * PI / 180);
-        cube.angle_y = cube.angle_y + (10 * PI / 180);
-        cube.angle_z = cube.angle_z + (5 * PI / 180);
+        shape.angle_x = shape.angle_x + (2 * PI / 180);
+        shape.angle_y = shape.angle_y + (10 * PI / 180);
+        shape.angle_z = shape.angle_z + (5 * PI / 180);
     }
 }
 
@@ -1376,7 +1527,8 @@ void app_main(void)
     //demo_rotate_cube(screen_buffer);
     //demo_rotate_shaded_cube(screen_buffer);
     //demo_rotate_shaded_cubes(screen_buffer);
-    demo_seizure_warning(screen_buffer);
+    //demo_seizure_warning(screen_buffer);
+    demo_lomont_shapes(screen_buffer);
 
     //clear_buffer(screen_buffer);
     //draw_buffer(screen_buffer);
