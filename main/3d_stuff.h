@@ -15,6 +15,9 @@
 
 // SSD1306 DEFINITIONS
 
+// Set the SSD1306 internal command registers as per
+// https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf
+
 // If I2C address is unspecified, use default
 // (0x3C for 128x32 displays, 0x3D for all others).
 // BAM: Using a 128x64 display, so 0x3D!
