@@ -1,3 +1,6 @@
+#ifndef MY_3D_STUFF_H
+#define MY_3D_STUFF_H
+
 #include <vector> // std::vector
 
 // TODO fix this include
@@ -169,6 +172,27 @@ class Point3 { //TODO could this inherit from Point?
             return std::sqrt((x * x) + (y * y) + (z * z));
         }
 };
+
+class Vec3 : public Point3{
+    public:
+        Vec3(float x0 = 0, float y0 = 0, float z0 = 0): Point3(x0, y0, z0){};
+        
+        static Vec3 random(int seed = 1){
+            std::srand(seed);
+            return Vec3(std::rand()%100, std::rand()%100, std::rand()%100);
+        }
+
+        uint magnitude(){
+            return length();
+        }
+
+        void to_unit(){
+            uint m = magnitude();
+            x = x/m;
+            y = y/m;
+            z = z/m;
+        }
+}; // Vec3
 
 class RotationMatrix3 : public Matrix<float>{
     public:
@@ -404,6 +428,20 @@ void oled_init(void){
     data[0] = 0x00;
     data[1] = 0xAF;
     ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+
+    // Set Page Address 22 00 FF
+    data[0] = 0x00;
+    data[1] = 0x22;
+    data[2] = 0x00;
+    data[3] = 0x07;
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+
+    // Set Column Address 21 0 7 TODO 3rd arg is set to WIDTH - 1, that should be 128-1=127 => 0x7F
+    data[0] = 0x00;
+    data[1] = 0x21;
+    data[2] = 0x00;
+    data[3] = 0x7F;
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
 
 }
 
@@ -1236,3 +1274,14 @@ Sprite get_lomont_shape(int choice){
 
     return sprite;
 }
+
+void my_setPixel(int x, int y, int color){
+    // Color is 1 if on, 0 if off
+    uint8_t shade;
+    if(color == 1){ shade = SHADE_SOLID; }
+    else{ shade = SHADE_EMPTY; }
+    shade_px(screen_buffer, shade, x, y);
+}
+    
+
+#endif // MY_3D_STUFF_H

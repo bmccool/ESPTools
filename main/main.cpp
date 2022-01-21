@@ -18,10 +18,13 @@
 #include <vector> // std::vector
 #include <iostream> // cin, cout
 #include <chrono> // function timing/metrics
+#include <string>
 
 #include "LomontShape.h"
+#include "Graphics/Font.h"
 //#include "3d_stuff.h" TODO guards for includes....
 #include "demos.h"
+#include "3d_stuff.h"
 
 static const char *TAG = "esp-oled";
 
@@ -30,13 +33,11 @@ extern "C" {
 }
 
 
-    
 void app_main(void)
 {
     printf("Hello world!\n");
 
     printf("Setting up i2c!\n");
-    uint8_t data[4];
     ESP_ERROR_CHECK(i2c_master_init());
     ESP_LOGI(TAG, "I2C initialized successfully");
 
@@ -44,8 +45,10 @@ void app_main(void)
     oled_init();
 
 
+    //demo_text_hello_world();
+    //demo_poles(screen_buffer);
     demo_lomont_shapes(screen_buffer);
-    
+        
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     ESP_ERROR_CHECK(i2c_driver_delete(I2C_MASTER_NUM));
     ESP_LOGI(TAG, "I2C unitialized successfully");
