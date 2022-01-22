@@ -2,6 +2,9 @@
 #define MY_3D_STUFF_H
 
 #include <vector> // std::vector
+#include <math.h> // Pow
+#include <iostream> // std::cout and such
+#include "esp_system.h" // esp_err_t
 
 // TODO fix this include
 #define FRAME_Y_RESOLUTION 64
@@ -176,13 +179,14 @@ class Point3 { //TODO could this inherit from Point?
 class Vec3 : public Point3{
     public:
         Vec3(float x0 = 0, float y0 = 0, float z0 = 0): Point3(x0, y0, z0){};
+        Vec3(Point3 p1): Point3(p1.x, p1.y, p1.z){}; 
         
         static Vec3 random(int seed = 1){
             std::srand(seed);
             return Vec3(std::rand()%100, std::rand()%100, std::rand()%100);
         }
 
-        uint magnitude(){
+        float magnitude(){
             return length();
         }
 
@@ -192,6 +196,13 @@ class Vec3 : public Point3{
             y = y/m;
             z = z/m;
         }
+
+        void scale(float factor){
+            x *= factor;
+            y *= factor;
+            z *= factor;
+        }
+
 }; // Vec3
 
 class RotationMatrix3 : public Matrix<float>{
@@ -1282,6 +1293,156 @@ void my_setPixel(int x, int y, int color){
     else{ shade = SHADE_EMPTY; }
     shade_px(screen_buffer, shade, x, y);
 }
-    
+
+class Pole{
+    public:
+        // A pole has a location, given by (x, y, z) (inherited)
+        // A pole has a speed, given by <dx, dy, dz>
+        Point3 location;        
+        Vec3 speed;
+        
+        // A pole also has a mass, given by m
+        float m;
+
+        Pole(float x0 = 0, float y0 = 0, float z0 = 0): location(Point3(x0, y0, z0)), speed(Vec3(0, 0, 0)), m(1){};
+
+        Pole operator + (Point3 p){
+            Pole ret_val(location.x + p.x, location.y + p.y, location.z + p.z);
+            ret_val.speed = speed;
+            ret_val.m = m;
+            return ret_val;
+        }
+
+        Pole operator - (Point3 p){
+            Pole ret_val(location.x - p.x, location.y - p.y, location.z - p.z);
+            ret_val.speed = speed;
+            ret_val.m = m;            
+            return ret_val;
+        }
+
+        Vec3 force_at(Point3 p1){
+            // Calculate the force from this pole at point p1
+            // F = GMm/R2
+            // G = gravitational Constant Eh, get rid of it
+            // M is mass of the pole
+            // m is mass of the point?
+            // R is the distance from pole to point
+            // float F = 1/(distance * distance)
+            // Magnitude is F, direction is unit vector in direction p1 -> this pole
+            Vec3 f = (location - p1);
+            float distance = f.magnitude();
+            float magnitude = 1 / (distance * distance);
+            f.to_unit();
+            f.scale(magnitude);
+            //pull.print();
+            return f;
+        }
+
+        void print(){
+            printf("Pole: (%d, %d, %d)<%.1f, %.1f, %.1f>\n", (int)location.x, (int)location.y, (int)location.z, speed.x, speed.y, speed.z);
+        }
+
+}; // Pole
+
+class System{
+    public:
+        std::vector<Pole> poles;
+        //std::vector<Hole> holes;
+
+        System(){};
+
+
+
+        Vec3 force_vector(Point3 p1){
+            // Get the force vector of the system at point p
+            Vec3 force(0, 0, 0);
+            for(auto &p : poles){
+                force = force + p.force_at(p1);
+            }
+            return force;
+        }
+
+        Point3 walk_perp_z(Vec3 v, Point3 p){
+            // Return the next drawable point from p that is perpendicular to v wrt to z
+            uint8_t x = p.x; //uint8 because these should map to drawable coordinates (don't care about decimals)
+            uint8_t y = p.y;
+            //uint8_t z = p.z;
+            
+            Vec3 perp(v * Vec3(0, 0, 1));
+            perp.to_unit();
+            Point3 ret_val = p + perp;
+            while(true){
+                if(((uint8_t)ret_val.x != x) || ((uint8_t)ret_val.y != y)){
+                    return ret_val;
+                }
+                ret_val = ret_val + perp;
+            }
+        }
+
+        void draw_rings(uint8_t* buffer){
+            float start = 0.1;
+            float spacing = 0.3;
+            int rings = 5;
+            for(auto &p : poles){
+                for(int ring = 0; ring < rings; ring++){
+                    Point3 p1(p.location.x, p.location.y, p.location.z);
+                    float targetmag = start * pow(spacing, ring);
+                    float mag = targetmag + 1;
+                    // Walk NORTH until the magnitude crosses from > to <
+                    while(mag > targetmag){
+                        p1.y += 1;
+                        mag = force_vector(p1).magnitude();
+                    }
+                    shade_px(buffer, SHADE_SOLID, p1.x, p1.y);
+                    
+                    // Walk p1 perpendicular to its force_vector until p1 is reached again
+                    //     to define the force countour at this magnitude
+                    // The direction perpendicular to the force_vector is given by f cross zhat
+                    //p2  = (p1 + (f cross zhat)unit)
+                    Point3 stop_point((uint8_t)p1.x, (uint8_t)p1.y, (uint8_t)p1.z);
+                    Point3 p2 = p1;
+                    printf("Getting ready to walk_perp_z\n");
+                    p2 = walk_perp_z(force_vector(p2), p2);
+                    printf("Walked perp z\n");
+                    p2.print();
+                    shade_px(buffer, SHADE_SOLID, p2.x, p2.y);
+                    while((int)stop_point.x != (int)p2.x &&
+                          (int)stop_point.y != (int)p2.y &&
+                          (int)stop_point.z != (int)p2.z){
+                        p2 = walk_perp_z(force_vector(p2), p2);
+                        shade_px(buffer, SHADE_SOLID, p2.x, p2.y);
+                        p2.print();
+                    }
+
+                }
+            }
+        }
+
+}; // Poles
+
+//void draw_rings(uint8_t* buffer, std::vector<Pole> poles){
+    //pole.print();
+    //int rings = 5;
+    //int spacing = 5; 
+
+    // Walk north force from all poles is <spacing>
+    // F = GMm/R2
+    // G = gravitational Constant Eh, get rid of it
+    // M is mass of the pole
+    // m is mass of the point?
+    // R is the distance from pole to point
+    // float F = 1/(distance * distance)
+
+    //for(auto &p : poles){
+    //    for(int ring = 0; ring < rings; ring++){
+
+    //    }
+    //}
+//}
+
+unsigned int Factorial( unsigned int number ) {
+    return number <= 1 ? number : Factorial(number-1)*number;
+}
+
 
 #endif // MY_3D_STUFF_H

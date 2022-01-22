@@ -216,36 +216,43 @@ void demo_text_hello_world(){
 void demo_poles(uint8_t* buffer, int num_poles = 1){
     //#define FRAME_Y_RESOLUTION 64
     //#define FRAME_X_RESOLUTION 128
+
+    // Initialize pole speed to random unit vector
     Vec3 speed = Vec3::random(1);
-    Point3 location(1, 1, 1);
     speed.to_unit();
-    speed.print();
 
+    // Create pole, set speed
+    Pole p1(1, 1, 1);
+    p1.speed = speed;
 
+    System system;
+    system.poles.push_back(p1);
 
     while(true){
         clear_buffer(buffer);
-        shade_px(buffer, SHADE_SOLID, location.x, location.y);
-        std::string coordinate = "(" + std::to_string((int)location.x) + ", " + std::to_string((int)location.y) + ")";
-        DrawText(0, 0, coordinate, &my_setPixel, 1);        
+        shade_px(buffer, SHADE_SOLID, system.poles[0].location.x, system.poles[0].location.y);
+        //std::string coordinate = "(" + std::to_string((int)location.x) + ", " + std::to_string((int)location.y) + ")";
+        //DrawText(0, 0, coordinate, &my_setPixel, 1);
+
+        //draw_rings(buffer, poles);
+        system.draw_rings(buffer);
         draw_buffer(buffer);
-        location = location + speed;
-        if(location.x < 0) {
-            speed.x = speed.x * -1;
-            location.x = 0;
-        } else if(location.x >= FRAME_X_RESOLUTION){
-            speed.x = speed.x * -1;
-            location.x = FRAME_X_RESOLUTION - 1;
-        }
-        if(location.y < 0){
-            speed.y = speed.y * -1;
-            location.y = 0;
-        } else if(location.y >= FRAME_Y_RESOLUTION){
-            speed.y = speed.y * -1;
-            location.y = FRAME_Y_RESOLUTION - 1;
+        for(auto &p : system.poles){
+            p = p + p.speed; // TODO Speed needs to be a function of Poles.  In fact this whole update should be a function of poles...
+            if(p.location.x < 0) {
+                p.speed.x = p.speed.x * -1;
+                p.location.x = 0;
+            } else if(p.location.x >= FRAME_X_RESOLUTION){
+                p.speed.x = p.speed.x * -1;
+                p.location.x = FRAME_X_RESOLUTION - 1;
+            }
+            if(p.location.y < 0){
+                p.speed.y = p.speed.y * -1;
+                p.location.y = 0;
+            } else if(p.location.y >= FRAME_Y_RESOLUTION){
+                p.speed.y = p.speed.y * -1;
+                p.location.y = FRAME_Y_RESOLUTION - 1;
+            }
         }
     }
-
-
-
 }

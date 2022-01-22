@@ -46,8 +46,8 @@ void app_main(void)
 
 
     //demo_text_hello_world();
-    //demo_poles(screen_buffer);
-    demo_lomont_shapes(screen_buffer);
+    demo_poles(screen_buffer);
+    //demo_lomont_shapes(screen_buffer);
         
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     ESP_ERROR_CHECK(i2c_driver_delete(I2C_MASTER_NUM));
