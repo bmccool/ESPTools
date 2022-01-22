@@ -2,5 +2,5 @@
 #include "3d_stuff.h"
 
 TEST_CASE("First Test", "[test]"){
-    REQUIRE(1 == 2);
+    REQUIRE(1 == 1);
 }

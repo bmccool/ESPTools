@@ -4,7 +4,9 @@
 #include <vector> // std::vector
 #include <math.h> // Pow
 #include <iostream> // std::cout and such
-#include "esp_system.h" // esp_err_t
+#include "esp_system.h" // esp_err_ti
+
+#include "LomontShape.h"
 
 // TODO fix this include
 #define FRAME_Y_RESOLUTION 64
