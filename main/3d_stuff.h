@@ -3,6 +3,7 @@
 
 #include <vector> // std::vector
 #include <math.h> // Pow
+#include <cmath> // round()
 #include <iostream> // std::cout and such
 #include "esp_system.h" // esp_err_ti
 
@@ -160,9 +161,22 @@ class Point3 { //TODO could this inherit from Point?
         }        
 
         Point3 operator * (Point3 p){ // Cross Product
-            return Point3(((gety() * p.getz()) - (getz() * p.gety())), 
-                          ((getx() * p.getz()) - (getz() * p.getx())),
-                          ((getx() * p.gety()) - (gety() * p.getx())));
+            return Point3(((y * p.z) - (z * p.y)), 
+                          ((z * p.x) - (x * p.z)),
+                          ((x * p.y) - (y * p.x)));
+        }
+
+        bool operator== (Point3 rhs) const{ // Equality Test
+            if((x == rhs.x) && (y == rhs.y) && (z == rhs.z)){ 
+                return true;
+            }
+            return false;
+        }
+        bool operator!= (Point3 rhs) const{ // Inequality Test
+            if((x != rhs.x) && (y != rhs.y) && (z != rhs.z)){ 
+                return true;
+            }
+            return false;
         }
 
         Point3 scale(float factor){
@@ -176,7 +190,21 @@ class Point3 { //TODO could this inherit from Point?
         float length(void){
             return std::sqrt((x * x) + (y * y) + (z * z));
         }
+
+        void round(){
+            x = std::round(x);
+            y = std::round(y);
+            z = std::round(z);
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const Point3& p);
 };
+
+std::ostream& operator<<(std::ostream& os, const Point3& p)
+{
+    os << "(" << p.x << ", " << p.y << ", " << p.z << ")";
+    return os;
+}
 
 class Vec3 : public Point3{
     public:
@@ -193,7 +221,7 @@ class Vec3 : public Point3{
         }
 
         void to_unit(){
-            uint m = magnitude();
+            float m = magnitude();
             x = x/m;
             y = y/m;
             z = z/m;
@@ -204,6 +232,10 @@ class Vec3 : public Point3{
             y *= factor;
             z *= factor;
         }
+
+        Vec3 operator - (){
+            return Vec3(-x, -y, -z);
+        }           
 
 }; // Vec3
 
@@ -1366,27 +1398,84 @@ class System{
 
         Point3 walk_perp_z(Vec3 v, Point3 p){
             // Return the next drawable point from p that is perpendicular to v wrt to z
-            uint8_t x = p.x; //uint8 because these should map to drawable coordinates (don't care about decimals)
-            uint8_t y = p.y;
+            int x = round(p.x); //uint8 because these should map to drawable coordinates (don't care about decimals)
+            int y = round(p.y);
             //uint8_t z = p.z;
             
             Vec3 perp(v * Vec3(0, 0, 1));
+            //std::cout << "Perpendicular Vector (wrt force vector: " << v << " and zhat): " << perp << std::endl;
             perp.to_unit();
+            //std::cout << "Perpendicular unit vector: " << perp << std::endl;
             Point3 ret_val = p + perp;
             while(true){
-                if(((uint8_t)ret_val.x != x) || ((uint8_t)ret_val.y != y)){
+                if(((int)round(ret_val.x) != x) || ((int)round(ret_val.y) != y)){
+                    ret_val.round();
                     return ret_val;
                 }
                 ret_val = ret_val + perp;
             }
         }
 
+        Point3 discrete_step(Vec3 direction, Point3 p){
+            // Move by at most 1 integer (<1>, <1>, <1>) in direction
+            direction.to_unit();
+            //std::cout << "Perpendicular unit vector: " << perp << std::endl;
+            Point3 ret_val = p + direction;
+            while(true){
+                if(((int)ret_val.x != (int)p.x) || ((int)ret_val.y != (int)p.y)){
+                    ret_val.round();
+                    return ret_val;
+                }
+                ret_val = ret_val + direction;
+            }
+        }
+
+        Point3 hug_target_magnitude(float targetmag, Point3 p){
+            Vec3 fv = force_vector(p);
+            float mag = fv.magnitude(); // Get the magnitude of force at this point
+            float newmag;
+            Point3 newpoint;
+            while(true){
+                // If the magnitude is less than the target magnitude, move one px in the direction of the force_vector(p)
+                if(mag < targetmag){
+                    newpoint = discrete_step(fv, p);
+                    newmag = force_vector(newpoint).magnitude();
+                    if(std::abs(newmag - targetmag) < std::abs(mag - targetmag)) { return newpoint; }
+                    else {return p; }
+                }
+                // If the magnitude is greater than the target magnitude, move on px opposite the direciton of the force_vector(p)
+                else if(mag > targetmag) {
+                    newpoint = discrete_step(-fv, p);
+                    newmag = force_vector(newpoint).magnitude();
+                    if(std::abs(newmag - targetmag) < std::abs(mag - targetmag)) { return newpoint; }
+                    else {return p; }
+                }
+                // If mag is not greater or less than the target, it's probaly equal, just call it good and return
+                return p;
+            }
+        }
+
+        //Point3 get_next_ring_point(Point3 p_last, float targetmag){
+        //    Point3 p = p_last;
+        //    Point3 p_walked;
+        //    Point3 p_checked;
+        //    std::cout << "Feeding Point to walk_perp(): " << p_last;
+        //    p_walked = walk_perp_z(force_vector(p_last), p_last);
+        //    std::cout << "Feeding Point to hug_target(): " << p_walked;
+        //    p_checked = hug_target_magnitude(targetmag, p_walked);
+        //    std::cout << "Checking Point: " << p_checked;
+        //    if(check_point != p1){ p2 = check_point; }
+        //    p1 = p2;
+        //}
+
         void draw_rings(uint8_t* buffer){
             float start = 0.1;
             float spacing = 0.3;
             int rings = 5;
+            printf("Starting to draw rings!\n");
             for(auto &p : poles){
                 for(int ring = 0; ring < rings; ring++){
+                    std::cout << "Drawing ring:  " << ring << std::endl;
                     Point3 p1(p.location.x, p.location.y, p.location.z);
                     float targetmag = start * pow(spacing, ring);
                     float mag = targetmag + 1;
@@ -1395,6 +1484,8 @@ class System{
                         p1.y += 1;
                         mag = force_vector(p1).magnitude();
                     }
+                    p1 = hug_target_magnitude(targetmag, p1);
+                    //std::cout << "Drawing point: " << p1 << " Mag(F) == " << force_vector(p1).magnitude() << " | " << targetmag << std::endl;
                     shade_px(buffer, SHADE_SOLID, p1.x, p1.y);
                     
                     // Walk p1 perpendicular to its force_vector until p1 is reached again
@@ -1403,21 +1494,35 @@ class System{
                     //p2  = (p1 + (f cross zhat)unit)
                     Point3 stop_point((uint8_t)p1.x, (uint8_t)p1.y, (uint8_t)p1.z);
                     Point3 p2 = p1;
-                    printf("Getting ready to walk_perp_z\n");
+                    Point3 check_point;
                     p2 = walk_perp_z(force_vector(p2), p2);
-                    printf("Walked perp z\n");
-                    p2.print();
+                    check_point = hug_target_magnitude(targetmag, p2);
+                    if(check_point != stop_point){ p2 = check_point; }
+                    p1 = p2;
+                    //std::cout << "Drawing point: " << p2 << " Mag(F) == " << force_vector(p2).magnitude() << " | " << targetmag << std::endl;
                     shade_px(buffer, SHADE_SOLID, p2.x, p2.y);
-                    while((int)stop_point.x != (int)p2.x &&
-                          (int)stop_point.y != (int)p2.y &&
-                          (int)stop_point.z != (int)p2.z){
+                    while(!((int)stop_point.x == (int)p2.x &&
+                            (int)stop_point.y == (int)p2.y &&
+                            (int)stop_point.z == (int)p2.z)){
+                        //std::cout << "Feeding Point to walk_perp(): " << p2;   
                         p2 = walk_perp_z(force_vector(p2), p2);
+                        //std::cout << "Feeding Point to hug_target(): " << p2;
+                        check_point = hug_target_magnitude(targetmag, p2);
+                        //std::cout << "Checking Point: " << check_point;
+                        if(check_point == p1){ 
+                            //std::cout << " Rejecting, equal to p1! <- " << p1;
+                        }else{
+                            p2 = check_point;
+                        }
+                        p1 = p2;
                         shade_px(buffer, SHADE_SOLID, p2.x, p2.y);
-                        p2.print();
+                        //std::cout << "Hit Point " << p2 << " with pole at " << poles[0].location << " Mag(F) == " << force_vector(p2).magnitude() << " | " << targetmag << std::endl;
+                        
                     }
-
+                    std::cout << "Finished ring: " << ring << std::endl;
                 }
             }
+            std::cout << "Drawing rings!" << std::endl;
         }
 
 }; // Poles
@@ -1441,10 +1546,5 @@ class System{
     //    }
     //}
 //}
-
-unsigned int Factorial( unsigned int number ) {
-    return number <= 1 ? number : Factorial(number-1)*number;
-}
-
 
 #endif // MY_3D_STUFF_H

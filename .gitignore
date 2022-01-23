@@ -1,0 +1,8 @@
+__pycache__/*
+build/*
+coredumps/*
+unit_tests/build/*
+Makefile
+example_test.py
+sdkconfig*
+.vscode/*

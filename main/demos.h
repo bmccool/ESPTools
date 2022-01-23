@@ -222,7 +222,7 @@ void demo_poles(uint8_t* buffer, int num_poles = 1){
     speed.to_unit();
 
     // Create pole, set speed
-    Pole p1(1, 1, 1);
+    Pole p1(64, 32, 0);
     p1.speed = speed;
 
     System system;

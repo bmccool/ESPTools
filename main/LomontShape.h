@@ -1,3 +1,6 @@
+#ifndef LOMONT_SHAPE_H
+#define LOMONT_SHAPE_H
+
 #include <vector> // std::vector
 #include <list> // std::list
 #include <cmath>
@@ -76,3 +79,5 @@ class LomontShape{
         */
     }
 }; // LomontShape
+
+#endif //LOMONT_SHAPE_H
