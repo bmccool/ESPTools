@@ -3,6 +3,7 @@ build/*
 coredumps/*
 unit_tests/build/*
 Makefile
+component.mk
 example_test.py
 sdkconfig*
 .vscode/*

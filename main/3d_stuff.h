@@ -235,9 +235,17 @@ class Vec3 : public Point3{
 
         Vec3 operator - (){
             return Vec3(-x, -y, -z);
-        }           
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const Vec3& v);
 
 }; // Vec3
+
+std::ostream& operator<<(std::ostream& os, const Vec3& v)
+{
+    os << "<" << v.x << ", " << v.y << ", " << v.z << ">";
+    return os;
+}
 
 class RotationMatrix3 : public Matrix<float>{
     public:
@@ -1376,7 +1384,15 @@ class Pole{
             printf("Pole: (%d, %d, %d)<%.1f, %.1f, %.1f>\n", (int)location.x, (int)location.y, (int)location.z, speed.x, speed.y, speed.z);
         }
 
+        friend std::ostream& operator<<(std::ostream& os, const Pole& p);
+
 }; // Pole
+
+std::ostream& operator<<(std::ostream& os, const Pole& p)
+{
+    os << "Pole:" << p.location << p.speed;
+    return os;
+}
 
 class System{
     public:
@@ -1384,8 +1400,6 @@ class System{
         //std::vector<Hole> holes;
 
         System(){};
-
-
 
         Vec3 force_vector(Point3 p1){
             // Get the force vector of the system at point p
@@ -1422,7 +1436,7 @@ class System{
             //std::cout << "Perpendicular unit vector: " << perp << std::endl;
             Point3 ret_val = p + direction;
             while(true){
-                if(((int)ret_val.x != (int)p.x) || ((int)ret_val.y != (int)p.y)){
+                if((round(ret_val.x) != round(p.x)) || (round(ret_val.y) != round(p.y))){
                     ret_val.round();
                     return ret_val;
                 }
@@ -1472,10 +1486,10 @@ class System{
             float start = 0.1;
             float spacing = 0.3;
             int rings = 5;
-            printf("Starting to draw rings!\n");
+            //printf("Starting to draw rings!\n");
             for(auto &p : poles){
                 for(int ring = 0; ring < rings; ring++){
-                    std::cout << "Drawing ring:  " << ring << std::endl;
+                    //std::cout << "Drawing ring:  " << ring << std::endl;
                     Point3 p1(p.location.x, p.location.y, p.location.z);
                     float targetmag = start * pow(spacing, ring);
                     float mag = targetmag + 1;
@@ -1483,7 +1497,9 @@ class System{
                     while(mag > targetmag){
                         p1.y += 1;
                         mag = force_vector(p1).magnitude();
+
                     }
+                    p1.round();
                     p1 = hug_target_magnitude(targetmag, p1);
                     //std::cout << "Drawing point: " << p1 << " Mag(F) == " << force_vector(p1).magnitude() << " | " << targetmag << std::endl;
                     shade_px(buffer, SHADE_SOLID, p1.x, p1.y);
@@ -1519,32 +1535,23 @@ class System{
                         //std::cout << "Hit Point " << p2 << " with pole at " << poles[0].location << " Mag(F) == " << force_vector(p2).magnitude() << " | " << targetmag << std::endl;
                         
                     }
-                    std::cout << "Finished ring: " << ring << std::endl;
+                    //std::cout << "Finished ring: " << ring << std::endl;
                 }
             }
-            std::cout << "Drawing rings!" << std::endl;
+            //std::cout << "Drawing rings!" << std::endl;
         }
+
+        friend std::ostream& operator<<(std::ostream& os, const Point3& p);
 
 }; // Poles
 
-//void draw_rings(uint8_t* buffer, std::vector<Pole> poles){
-    //pole.print();
-    //int rings = 5;
-    //int spacing = 5; 
-
-    // Walk north force from all poles is <spacing>
-    // F = GMm/R2
-    // G = gravitational Constant Eh, get rid of it
-    // M is mass of the pole
-    // m is mass of the point?
-    // R is the distance from pole to point
-    // float F = 1/(distance * distance)
-
-    //for(auto &p : poles){
-    //    for(int ring = 0; ring < rings; ring++){
-
-    //    }
-    //}
-//}
+std::ostream& operator<<(std::ostream& os, const System& s)
+{
+    os << "System:" << std::endl;
+    for(auto &p : s.poles){
+        os << p << std::endl;
+    }
+    return os;
+}
 
 #endif // MY_3D_STUFF_H

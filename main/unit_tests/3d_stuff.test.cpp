@@ -60,7 +60,17 @@ TEST_CASE("System::hug_target_magnitude", "[test, System]"){
     REQUIRE(system.hug_target_magnitude(0.00001, Point3( 0,-5, 0)) == Point3( 0,-6, 0));
     REQUIRE(system.hug_target_magnitude(0.00001, Point3( 5, 0, 0)) == Point3( 6, 0, 0));
     REQUIRE(system.hug_target_magnitude(0.00001, Point3(-5, 0, 0)) == Point3(-6, 0, 0));    
-    
+
+    // Trouble test cases
+    system.poles[0] = Pole(64.8014, 33.0442, 1.50572);
+    REQUIRE(system.hug_target_magnitude(0.03, Point3(65, 38, 2)) == Point3(65, 39, 2));     
+}
+
+TEST_CASE("System::discrete_step", "[test, System]"){
+    Pole pole(64.8014, 33.0442, 1.5057);
+    System system;
+    system.poles.push_back(pole);
+    REQUIRE(system.discrete_step(-system.force_vector(Point3(65, 38, 2)), Point3(65, 38, 2)) == Point3(65, 39, 2));
 }
 
 TEST_CASE("Vec3::to_unit", "[test, Vec3]"){

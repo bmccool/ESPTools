@@ -222,7 +222,7 @@ void demo_poles(uint8_t* buffer, int num_poles = 1){
     speed.to_unit();
 
     // Create pole, set speed
-    Pole p1(64, 32, 0);
+    Pole p1(64.8014, 33.0442, 1.50572);
     p1.speed = speed;
 
     System system;
@@ -235,6 +235,8 @@ void demo_poles(uint8_t* buffer, int num_poles = 1){
         //DrawText(0, 0, coordinate, &my_setPixel, 1);
 
         //draw_rings(buffer, poles);
+        //std::cout << system << std::endl;
+        //vTaskDelay(100 / portTICK_PERIOD_MS);
         system.draw_rings(buffer);
         draw_buffer(buffer);
         for(auto &p : system.poles){
