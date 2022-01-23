@@ -1486,10 +1486,11 @@ class System{
             float start = 0.1;
             float spacing = 0.3;
             int rings = 5;
-            //printf("Starting to draw rings!\n");
+            bool debug = false;
+            if(debug){ std::cout << "Starting to draw rings!" << std::endl; }
             for(auto &p : poles){
                 for(int ring = 0; ring < rings; ring++){
-                    //std::cout << "Drawing ring:  " << ring << std::endl;
+                    if(debug){ std::cout << "Drawing ring:  " << ring << std::endl; }
                     Point3 p1(p.location.x, p.location.y, p.location.z);
                     float targetmag = start * pow(spacing, ring);
                     float mag = targetmag + 1;
@@ -1501,44 +1502,44 @@ class System{
                     }
                     p1.round();
                     p1 = hug_target_magnitude(targetmag, p1);
-                    //std::cout << "Drawing point: " << p1 << " Mag(F) == " << force_vector(p1).magnitude() << " | " << targetmag << std::endl;
+                    if(debug){ std::cout << "Drawing point: " << p1 << " Mag(F) == " << force_vector(p1).magnitude() << " | " << targetmag << std::endl; }
                     shade_px(buffer, SHADE_SOLID, p1.x, p1.y);
                     
                     // Walk p1 perpendicular to its force_vector until p1 is reached again
                     //     to define the force countour at this magnitude
                     // The direction perpendicular to the force_vector is given by f cross zhat
                     //p2  = (p1 + (f cross zhat)unit)
-                    Point3 stop_point((uint8_t)p1.x, (uint8_t)p1.y, (uint8_t)p1.z);
+                    Point3 stop_point = p1; // It's already been rounded, so don't need to round again.
                     Point3 p2 = p1;
                     Point3 check_point;
                     p2 = walk_perp_z(force_vector(p2), p2);
                     check_point = hug_target_magnitude(targetmag, p2);
                     if(check_point != stop_point){ p2 = check_point; }
                     p1 = p2;
-                    //std::cout << "Drawing point: " << p2 << " Mag(F) == " << force_vector(p2).magnitude() << " | " << targetmag << std::endl;
+                    if(debug){ std::cout << "Drawing point: " << p2 << " Mag(F) == " << force_vector(p2).magnitude() << " | " << targetmag << std::endl; }
                     shade_px(buffer, SHADE_SOLID, p2.x, p2.y);
                     while(!((int)stop_point.x == (int)p2.x &&
                             (int)stop_point.y == (int)p2.y &&
                             (int)stop_point.z == (int)p2.z)){
-                        //std::cout << "Feeding Point to walk_perp(): " << p2;   
+                        if(debug){ std::cout << "Feeding Point to walk_perp(): " << p2; }
                         p2 = walk_perp_z(force_vector(p2), p2);
-                        //std::cout << "Feeding Point to hug_target(): " << p2;
+                        if(debug){ std::cout << "Feeding Point to hug_target(): " << p2; }
                         check_point = hug_target_magnitude(targetmag, p2);
-                        //std::cout << "Checking Point: " << check_point;
+                        if(debug){ std::cout << "Checking Point: " << check_point; }
                         if(check_point == p1){ 
-                            //std::cout << " Rejecting, equal to p1! <- " << p1;
+                            if(debug){ std::cout << " Rejecting, equal to p1! <- " << p1; }
                         }else{
                             p2 = check_point;
                         }
                         p1 = p2;
                         shade_px(buffer, SHADE_SOLID, p2.x, p2.y);
-                        //std::cout << "Hit Point " << p2 << " with pole at " << poles[0].location << " Mag(F) == " << force_vector(p2).magnitude() << " | " << targetmag << std::endl;
+                        if(debug){ std::cout << "Hit Point " << p2 << " with pole at " << poles[0].location << " Mag(F) == " << force_vector(p2).magnitude() << " | " << targetmag << std::endl; }
                         
                     }
-                    //std::cout << "Finished ring: " << ring << std::endl;
+                    if(debug){ std::cout << "Finished ring: " << ring << std::endl; }
                 }
             }
-            //std::cout << "Drawing rings!" << std::endl;
+            if(debug){ std::cout << "Drawing rings!" << std::endl; }
         }
 
         friend std::ostream& operator<<(std::ostream& os, const Point3& p);

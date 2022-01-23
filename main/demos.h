@@ -222,8 +222,9 @@ void demo_poles(uint8_t* buffer, int num_poles = 1){
     speed.to_unit();
 
     // Create pole, set speed
-    Pole p1(64.8014, 33.0442, 1.50572);
-    p1.speed = speed;
+    Pole p1(54.8719, 45.2471, 255.971);
+    //p1.speed = speed;
+    p1.speed = Vec3(-0.400714, -0.522143, 0.752858);
 
     System system;
     system.poles.push_back(p1);
@@ -233,10 +234,7 @@ void demo_poles(uint8_t* buffer, int num_poles = 1){
         shade_px(buffer, SHADE_SOLID, system.poles[0].location.x, system.poles[0].location.y);
         //std::string coordinate = "(" + std::to_string((int)location.x) + ", " + std::to_string((int)location.y) + ")";
         //DrawText(0, 0, coordinate, &my_setPixel, 1);
-
-        //draw_rings(buffer, poles);
-        //std::cout << system << std::endl;
-        //vTaskDelay(100 / portTICK_PERIOD_MS);
+        std::cout << system << std::endl;
         system.draw_rings(buffer);
         draw_buffer(buffer);
         for(auto &p : system.poles){
