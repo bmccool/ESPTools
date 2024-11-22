@@ -13,7 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
-#include "esp_spi_flash.h"
+#include "spi_flash_mmap.h"
 #include <cmath> // std::abs
 #include <vector> // std::vector
 #include <iostream> // cin, cout
@@ -25,6 +25,7 @@
 //#include "3d_stuff.h" TODO guards for includes....
 #include "demos.h"
 #include "3d_stuff.h"
+#include "i2c_sniffer.h"
 
 static const char *TAG = "esp-oled";
 
@@ -46,8 +47,10 @@ void app_main(void)
 
 
     //demo_text_hello_world();
-    demo_poles(screen_buffer);
+    //demo_rotate_shaded_cubes(screen_buffer);
+    //demo_poles(screen_buffer);
     //demo_lomont_shapes(screen_buffer);
+
         
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     ESP_ERROR_CHECK(i2c_driver_delete(I2C_MASTER_NUM));

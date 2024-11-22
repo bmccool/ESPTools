@@ -234,7 +234,7 @@ void demo_poles(uint8_t* buffer, int num_poles = 1){
         shade_px(buffer, SHADE_SOLID, system.poles[0].location.x, system.poles[0].location.y);
         //std::string coordinate = "(" + std::to_string((int)location.x) + ", " + std::to_string((int)location.y) + ")";
         //DrawText(0, 0, coordinate, &my_setPixel, 1);
-        std::cout << system << std::endl;
+        //std::cout << system << std::endl;
         system.draw_rings(buffer);
         draw_buffer(buffer);
         for(auto &p : system.poles){

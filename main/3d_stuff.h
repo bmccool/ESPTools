@@ -16,8 +16,8 @@
 // I2C DEFINITIONS
 #define I2C_MASTER_SCL_IO           CONFIG_I2C_MASTER_SCL      /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO           CONFIG_I2C_MASTER_SDA      /*!< GPIO number used for I2C master data  */
-#define I2C_MASTER_NUM              0                          /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
-#define I2C_MASTER_FREQ_HZ          1000000                     /*!< I2C master clock frequency */
+#define I2C_MASTER_NUM              (i2c_port_t)0              /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
+#define I2C_MASTER_FREQ_HZ          400000                     /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_TIMEOUT_MS       1000
@@ -360,7 +360,7 @@ static uint8_t i2c_buffer[I2C_BUFFER_SIZE];
 
 static esp_err_t i2c_master_init(void)
 {
-    int i2c_master_port = I2C_MASTER_NUM;
+    i2c_port_t i2c_master_port = (i2c_port_t)I2C_MASTER_NUM;
 
     i2c_config_t conf;
     conf.mode = I2C_MODE_MASTER;
@@ -380,7 +380,7 @@ void oled_init(void){
     // Display Off
     data[0] = 0x00;
     data[1] = 0xAE;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Osc Frequency D5h, 80h
     // Set Display Clock Divide Ratio/Oscillator Frequency
@@ -389,112 +389,112 @@ void oled_init(void){
     data[0] = 0x00;
     data[1] = 0xD5;
     data[2] = 0x80;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set MUX Ratio A8h, 3Fh 
     // BAM TODO: Something to do with frame refresh?
     data[0] = 0x00;
     data[1] = 0xA8;
     data[2] = 0x3F;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Display Offset D3h, 00h 
     // BAM TODO: Set veritical shift, what?  00 is set after reset, so this is just ensuring default value?
     data[0] = 0x00;
     data[1] = 0xD3;
     data[2] = 0x00;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Display Start Line 40h
     data[0] = 0x00;
     data[1] = 0x40;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Enable charge pump regulator 8Dh, 14h
     // 14 enables charge pump during displayu on
     data[0] = 0x00;
     data[1] = 0x8D;
     data[2] = 0x14;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Memory Mode
     // 00 HORIZONTAL ADDRESSING MODE - Page addressing mode is 02 and default, but this follows adafruit
     data[0] = 0x00;
     data[1] = 0x20; 
     data[2] = 0x00;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));    
 
     // Set Segment re-map A0h/A1h
     // A0 means column address 0 is mapped to SEG0 BAM TODO what???
     data[0] = 0x00;
     data[1] = 0xA1;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set COM Output Scan Direction C0h/C8h 
     // BAM: C0 is normal (default) COM0 -> COM[N-1], C8 is remapped, COM[N-1] -> COM0.  N is multiplex ratio
     data[0] = 0x00;
     data[1] = 0xC8;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set COM Pins hardware configuration DAh, 02
     data[0] = 0x00;
     data[1] = 0xDA; 
     data[2] = 0x12;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Contrast Control 81h, 7Fh
     // Set [1-256] contrast steps.  Default is 7F
     data[0] = 0x00;
     data[1] = 0x81;
     data[2] = 0xCF;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Pre-charge Period D9 F1 
     data[0] = 0x00;
     data[1] = 0xD9;
     data[2] = 0xF1;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));    
 
     // Set VCOMH Deselect Level DB 40
     data[0] = 0x00;
     data[1] = 0xDB;
     data[2] = 0x40;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));        
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 3, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));        
 
     // Entire Display On (resume) A4h
     data[0] = 0x00;
     data[1] = 0xA4;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Normal Display A6h
     // BAM: As opposed to INVERSE display
     data[0] = 0x00;
     data[1] = 0xA6;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Deactivate Scroll
     data[0] = 0x00;
     data[1] = 0x2E;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));    
 
     // Display On AFh
     data[0] = 0x00;
     data[1] = 0xAF;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Page Address 22 00 FF
     data[0] = 0x00;
     data[1] = 0x22;
     data[2] = 0x00;
     data[3] = 0x07;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 
     // Set Column Address 21 0 7 TODO 3rd arg is set to WIDTH - 1, that should be 128-1=127 => 0x7F
     data[0] = 0x00;
     data[1] = 0x21;
     data[2] = 0x00;
     data[3] = 0x7F;
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));    
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 4, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));    
 
 }
 
@@ -568,7 +568,7 @@ void draw_buffer(uint8_t* buffer){
     for(int i = 1; i < I2C_BUFFER_SIZE; i++){
         i2c_buffer[i] = buffer[i-1];
     }    
-    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, i2c_buffer, I2C_BUFFER_SIZE, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+    ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, i2c_buffer, I2C_BUFFER_SIZE, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
 }
 
 void dump_buffer(uint8_t* buffer){
@@ -640,7 +640,7 @@ void oled_spiral(int size){
     for(int i = 0; i < (96 * 8); i++){
         data[0] = 0x40;
         data[1] = screen_buffer[i];
-        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_RATE_MS));
+        ESP_ERROR_CHECK(i2c_master_write_to_device(I2C_MASTER_NUM, SSD1306_I2C_ADDR, data, 2, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
     }
     
 }
